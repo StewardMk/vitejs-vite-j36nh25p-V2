@@ -1,20 +1,22 @@
 interface ConfirmModalProps {
   open: boolean
-  variant: 'sterner' | 'plain'
+  variant: 'sterner' | 'plain' | 'notice'
   title: string
   message: string
   confirmLabel: string
-  cancelLabel: string
+  cancelLabel?: string
   onConfirm: () => void
-  onCancel: () => void
+  onCancel?: () => void
 }
 
 /**
- * Two variants, matching real OET behavior:
+ * Three variants, matching real OET behavior:
  * - "sterner": shown when time remains / questions are unanswered — clock icon,
  *   warns the candidate they still have time and can't come back.
  * - "plain": shown when there's nothing left to lose (time's up / all answered) —
  *   simple "are you sure?" with a question-mark icon.
+ * - "notice": a one-button, non-dismissible heads-up (e.g. "time's up") —
+ *   clock icon, no cancel button; omit cancelLabel/onCancel to use it.
  */
 function ConfirmModal({
   open,
@@ -43,7 +45,7 @@ function ConfirmModal({
 
         <div className="modal-body">
           <span className={`modal-icon ${variant}`} aria-hidden="true">
-            {variant === 'sterner' ? '⏰' : '?'}
+            {variant === 'sterner' || variant === 'notice' ? '⏰' : '?'}
           </span>
           <p>{message}</p>
         </div>
@@ -52,9 +54,11 @@ function ConfirmModal({
           <button className="btn-primary" onClick={onConfirm}>
             {confirmLabel}
           </button>
-          <button className="btn-secondary" onClick={onCancel}>
-            {cancelLabel}
-          </button>
+          {onCancel && cancelLabel && (
+            <button className="btn-secondary" onClick={onCancel}>
+              {cancelLabel}
+            </button>
+          )}
         </div>
       </div>
     </div>
