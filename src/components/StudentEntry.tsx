@@ -90,22 +90,19 @@ function StudentEntry({ onSuccess }: StudentEntryProps) {
     setLoading(true)
     setError('')
 
-    const { data, error: invokeError } =
-      await supabase.functions.invoke('redeem-access-code', {
-        body: {
-          code: code.trim().toUpperCase(),
-        },
-      })
+    const { data, error: redeemError } = await supabase.rpc('redeem_access_code', {
+      p_code: code.trim().toUpperCase(),
+    })
 
     setLoading(false)
 
-    if (invokeError) {
-      setError(extractErrorMessage(invokeError))
+    if (redeemError) {
+      setError(extractErrorMessage(redeemError))
       return
     }
 
-    if (data?.error) {
-      setError(data.error)
+    if (!data?.test) {
+      setError(data?.error ?? 'That access code is invalid, expired, or has reached its usage limit.')
       return
     }
 

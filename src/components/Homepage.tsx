@@ -516,6 +516,10 @@ function Homepage() {
           <Link to="/tutor">
             <button className="btn-secondary">Tutor login</button>
           </Link>
+
+          <Link to="/admin">
+            <button className="btn-primary" style={{ padding: '10px 18px' }}>Admin upload</button>
+          </Link>
         </div>
       </nav>
 
@@ -1230,6 +1234,13 @@ function Homepage() {
               style={{ textDecoration: 'none' }}
             >
               Tutor login
+            </Link>
+
+            <Link
+              to="/admin"
+              style={{ textDecoration: 'none' }}
+            >
+              Admin upload
             </Link>
           </div>
         </div>

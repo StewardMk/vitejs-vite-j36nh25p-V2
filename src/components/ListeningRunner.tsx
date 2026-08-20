@@ -147,16 +147,6 @@ function ListeningRunner({
     currentPartQuestions[currentQuestionIndex]
 
 
-  const currentSequentialStimulus =
-    currentPart?.stimuli?.find(
-      (stimulus: any) =>
-        stimulus.questions?.some(
-          (question: any) =>
-            question.id === currentSequentialQuestion?.id
-        )
-    )
-
-
   /*
    * Total unanswered questions.
    */

@@ -1,49 +1,65 @@
 import { z } from 'zod'
 
-const questionTypes = [
-  'gap_fill',
-  'short_answer',
-  'sentence_completion',
-  'matching',
-  'mcq_3',
-  'mcq_4',
-  'writing_task',
-] as const
+const optionSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+}).passthrough()
 
 const questionSchema = z.object({
-  question_type: z.enum(questionTypes),
-  prompt: z.string(),
-  options: z.array(z.string()).optional(),
-  correct_answer: z.string().optional(),
+  id: z.string(),
   order_index: z.number(),
-})
+  question_type: z.string(),
+  prompt: z.string().optional(),
+  question: z.string().optional(),
+  label: z.string().optional(),
+  passage: z.string().optional(),
+  options: z.array(optionSchema).optional(),
+  correct_answer: z.string().nullable().optional(),
+  audio: z.object({ file_ref: z.string() }).optional(),
+}).passthrough()
 
-const stimulusSchema = z.object({
-  type: z.enum(['text', 'audio']),
-  content: z.string().optional(),
-  file_ref: z.string().optional(),
+const documentSchema = z.object({
+  id: z.string().optional(),
+  order_index: z.number().optional(),
+  title: z.string().optional(),
+  file_ref: z.string(),
+  page_start: z.number().nullable().optional(),
+  page_end: z.number().nullable().optional(),
+}).passthrough()
+
+const extractSchema = z.object({
+  id: z.string(),
   order_index: z.number(),
-  questions: z.array(questionSchema).min(1),
-})
+  file_ref: z.string(),
+  questions: z.array(questionSchema).optional(),
+}).passthrough()
 
-const partSchema = z.object({
+const stageSchema = z.object({
+  id: z.string(),
+  section: z.string(),
+  part: z.string().optional(),
   label: z.string(),
-  time_limit_sec: z.number(),
+  presentation: z.enum(['introduction', 'audio', 'pdf', 'question_page', 'writing']),
+  duration_seconds: z.number().nullable().optional(),
+  section_group: z.string().optional(),
+  optional: z.boolean().optional(),
   instructions: z.string().optional(),
-  stimuli: z.array(stimulusSchema).min(1),
-})
-
-const subtestSchema = z.object({
-  type: z.enum(['listening', 'reading', 'writing']),
-  parts: z.array(partSchema).min(1),
-})
+  audio: z.object({ file_ref: z.string() }).optional(),
+  documents: z.array(documentSchema).optional(),
+  extracts: z.array(extractSchema).optional(),
+  questions: z.array(questionSchema).optional(),
+}).passthrough()
 
 export const testJsonSchema = z.object({
-  test: z.object({
+  schema_version: z.string(),
+  exam: z.object({
+    id: z.string(),
     title: z.string(),
-    profession: z.string().optional(),
-  }),
-  subtests: z.array(subtestSchema).min(1),
-})
+    profession: z.string(),
+    language: z.string().optional(),
+    stages: z.array(stageSchema).min(1),
+    asset_handling: z.record(z.string(), z.unknown()).optional(),
+  }).passthrough(),
+}).passthrough()
 
 export type TestJson = z.infer<typeof testJsonSchema>
