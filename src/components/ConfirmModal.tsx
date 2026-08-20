@@ -9,6 +9,7 @@ interface ConfirmModalProps {
   onCancel?: () => void
 }
 
+
 /**
  * Three variants, matching real OET behavior:
  * - "sterner": shown when time remains / questions are unanswered — clock icon,
