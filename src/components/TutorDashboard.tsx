@@ -27,6 +27,8 @@ interface SessionSummary {
   listening: SubtestResult | null
   reading: SubtestResult | null
   writing: SubtestResult | null
+  writingPrompt: string | null
+  essayText: string | null
 }
 
 interface EditValues {
@@ -47,6 +49,43 @@ function toEditValues(session: SessionSummary): EditValues {
   }
 }
 
+function findWritingQuestion(manifest: any): { id: string; prompt: string } | null {
+  const stage = manifest?.exam?.stages?.find((s: any) => s.presentation === 'writing')
+  const q = stage?.questions?.[0]
+  if (!q) return null
+  return { id: q.id, prompt: q.question ?? q.prompt ?? q.label ?? '' }
+}
+
+function openWritingAnswer(session: SessionSummary) {
+  const win = window.open('', '_blank')
+  if (!win) return
+
+  const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  win.document.write(`
+    <html>
+      <head>
+        <title>${session.studentName} — Writing answer</title>
+        <style>
+          body { font-family: 'Work Sans', Arial, sans-serif; padding: 40px; color: #122033; max-width: 720px; margin: 0 auto; }
+          h1 { font-size: 22px; margin-bottom: 4px; }
+          p.meta { color: #64748B; margin-top: 0; }
+          .prompt { background: #F4F8FF; border-radius: 8px; padding: 16px 20px; margin: 20px 0; font-size: 13px; color: #334155; white-space: pre-wrap; }
+          .essay { white-space: pre-wrap; line-height: 1.6; font-size: 15px; }
+        </style>
+      </head>
+      <body>
+        <h1>${session.studentName}</h1>
+        <p class="meta">${session.testTitle} &middot; Writing &middot; ${new Date(session.latestSubmittedAt).toLocaleString()}</p>
+        ${session.writingPrompt ? `<div class="prompt">${escape(session.writingPrompt)}</div>` : ''}
+        <div class="essay">${session.essayText ? escape(session.essayText) : '<em>No response recorded.</em>'}</div>
+      </body>
+    </html>
+  `)
+  win.document.close()
+  win.focus()
+  win.print()
+}
 function openPrintableResult(session: SessionSummary) {
   const win = window.open('', '_blank')
   if (!win) return
@@ -158,7 +197,8 @@ function TutorDashboard() {
           student_name,
           session_group_id,
           submitted_at,
-          tests ( title )
+          answers,
+          tests ( title, manifest )
         )
         `
       )
@@ -179,6 +219,7 @@ function TutorDashboard() {
       if (!attempt?.session_group_id) continue
 
       const key = attempt.session_group_id
+      const writingQuestion = findWritingQuestion(attempt.tests?.manifest)
       const existing = bySession.get(key) ?? {
         sessionGroupId: key,
         studentName: attempt.student_name ?? 'Unknown',
@@ -187,6 +228,8 @@ function TutorDashboard() {
         listening: null,
         reading: null,
         writing: null,
+        writingPrompt: writingQuestion?.prompt ?? null,
+        essayText: writingQuestion ? attempt.answers?.[writingQuestion.id] ?? null : null,
       }
 
       if (attempt.submitted_at > existing.latestSubmittedAt) {
@@ -285,6 +328,7 @@ function TutorDashboard() {
             scorable_count: toIntOrNull(editValues.listeningScorable),
           })
           .eq('id', s.listening.resultId)
+          .select('id')
       )
     }
     if (s.reading) {
@@ -296,6 +340,7 @@ function TutorDashboard() {
             scorable_count: toIntOrNull(editValues.readingScorable),
           })
           .eq('id', s.reading.resultId)
+          .select('id')
       )
     }
     if (s.writing) {
@@ -304,16 +349,24 @@ function TutorDashboard() {
           .from('results')
           .update({ raw_score: toIntOrNull(editValues.writingRaw) })
           .eq('id', s.writing.resultId)
+          .select('id')
       )
     }
 
     const results = await Promise.all(updates)
     const failed = results.find((r) => r.error)
+    const blocked = results.find((r) => !r.error && (r.data?.length ?? 0) === 0)
 
     setSavingEdit(false)
 
     if (failed) {
       setEditError(failed.error.message)
+      return
+    }
+    if (blocked) {
+      setEditError(
+        'Nothing was saved -- the database rejected the update (likely a missing RLS UPDATE policy on "results"). See supabase_results_update_policy.sql.'
+      )
       return
     }
 
@@ -536,8 +589,15 @@ function TutorDashboard() {
                                     placeholder="/ 38"
                                   />
                                 </span>
+                              ) : s.writing ? (
+                                <span className="tutor-writing-cell">
+                                  <button className="btn-secondary" onClick={() => openWritingAnswer(s)}>
+                                    View / download answer
+                                  </button>
+                                  <span className="tutor-writing-grade">{formatWriting(s.writing.raw)}</span>
+                                </span>
                               ) : (
-                                formatWriting(s.writing?.raw ?? null)
+                                '—'
                               )}
                             </td>
                             <td>{new Date(s.latestSubmittedAt).toLocaleDateString()}</td>
