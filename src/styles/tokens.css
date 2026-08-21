@@ -2588,6 +2588,124 @@
 .manifest-stage-actions { display:flex; justify-content:flex-end; margin-top:28px; padding-top:20px; border-top:1px solid rgba(46,42,34,.1); }
 .manifest-intro-stage { max-width:760px; margin:10vh auto; text-align:center; }
 .manifest-intro-stage h1 { font-size:42px; margin-top:22px; }
+/* =========================================================
+   Tutor dashboard
+   ========================================================= */
+.tutor-dashboard-page {
+  min-height: 100vh;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 40px 24px 64px;
+  box-sizing: border-box;
+}
+
+.tutor-login-card { max-width: 420px; margin: 10vh auto 0; }
+.tutor-login-form { display: grid; gap: 14px; margin-top: 20px; }
+.tutor-login-form label { display: grid; gap: 6px; font-size: 14px; color: var(--color-ink-soft); }
+.tutor-login-form input {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.tutor-dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 20px;
+  gap: 16px;
+}
+.tutor-dashboard-header h1 { margin: 4px 0 0; }
+
+.tutor-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+.tutor-tab {
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  color: var(--color-ink-soft);
+  font-family: var(--font-body);
+  font-size: 14px;
+  cursor: pointer;
+}
+.tutor-tab.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-white);
+  font-weight: 600;
+}
+
+.tutor-panel { max-width: none; }
+.tutor-panel h2 { margin-top: 0; }
+.tutor-panel-note { color: var(--color-ink-muted); font-size: 13px; max-width: 640px; }
+
+.tutor-field { display: grid; gap: 6px; margin-top: 16px; font-size: 14px; color: var(--color-ink-soft); }
+.tutor-field select,
+.tutor-field input {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+.tutor-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+.tutor-error { color: var(--color-danger); font-size: 14px; margin-top: 10px; }
+
+.tutor-generated-code {
+  margin-top: 20px;
+  padding: 18px 20px;
+  border-radius: var(--radius-card);
+  background: var(--color-primary-light);
+  display: grid;
+  gap: 6px;
+}
+.tutor-generated-code strong {
+  font: 700 32px var(--font-mono);
+  letter-spacing: 4px;
+  color: var(--color-primary-dark);
+}
+.tutor-generated-code span { color: var(--color-ink-muted); font-size: 13px; }
+
+.tutor-table-wrap { overflow-x: auto; margin-top: 16px; }
+.tutor-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tutor-table th {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-ink-muted);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.tutor-table td { padding: 10px 12px; border-bottom: 1px solid var(--color-border-light); vertical-align: middle; }
+.tutor-row-actions { display: flex; gap: 8px; white-space: nowrap; }
+.tutor-row-actions .btn-primary,
+.tutor-row-actions .btn-secondary { padding: 6px 12px; font-size: 13px; }
+
+.tutor-score-edit { display: inline-flex; align-items: center; gap: 4px; }
+.tutor-score-edit input {
+  width: 44px;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  text-align: center;
+}
+
+.manifest-submit-error {
+  margin: 16px auto 0;
+  max-width: 480px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: #fdecea;
+  color: #7a1f1f;
+  font-size: 14px;
+}
 .intro-copy {
   text-align: left;
   max-width: 640px;
@@ -3014,3 +3132,4 @@
      flex: 1;
      border: none;
    }
+   

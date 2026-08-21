@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import SiteNav from './SiteNav'
+import { formatListeningReading, formatWriting } from '../lib/oetGrading'
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
@@ -11,14 +13,75 @@ function generateCode(length = 6) {
   return code
 }
 
+interface SubtestResult {
+  resultId: string
+  raw: number | null
+  scorable: number | null
+}
+
 interface SessionSummary {
   sessionGroupId: string
   studentName: string
   testTitle: string
   latestSubmittedAt: string
-  listening: { raw: number; scorable: number } | null
-  reading: { raw: number; scorable: number } | null
-  hasWriting: boolean
+  listening: SubtestResult | null
+  reading: SubtestResult | null
+  writing: SubtestResult | null
+}
+
+interface EditValues {
+  listeningRaw: string
+  listeningScorable: string
+  readingRaw: string
+  readingScorable: string
+  writingRaw: string
+}
+
+function toEditValues(session: SessionSummary): EditValues {
+  return {
+    listeningRaw: session.listening?.raw?.toString() ?? '',
+    listeningScorable: session.listening?.scorable?.toString() ?? '',
+    readingRaw: session.reading?.raw?.toString() ?? '',
+    readingScorable: session.reading?.scorable?.toString() ?? '',
+    writingRaw: session.writing?.raw?.toString() ?? '',
+  }
+}
+
+function openPrintableResult(session: SessionSummary) {
+  const win = window.open('', '_blank')
+  if (!win) return
+
+  const row = (label: string, value: string) => `<tr><td>${label}</td><td>${value}</td></tr>`
+
+  win.document.write(`
+    <html>
+      <head>
+        <title>${session.studentName} — ${session.testTitle}</title>
+        <style>
+          body { font-family: 'Work Sans', Arial, sans-serif; padding: 40px; color: #122033; }
+          h1 { font-size: 22px; margin-bottom: 4px; }
+          p.meta { color: #64748B; margin-top: 0; }
+          table { border-collapse: collapse; width: 100%; max-width: 480px; margin-top: 24px; }
+          td { padding: 10px 12px; border: 1px solid #E2E8F0; }
+          td:first-child { font-weight: 600; width: 40%; }
+          p.footnote { color: #94A3B8; font-size: 12px; max-width: 480px; }
+        </style>
+      </head>
+      <body>
+        <h1>${session.studentName}</h1>
+        <p class="meta">${session.testTitle} &middot; ${new Date(session.latestSubmittedAt).toLocaleString()}</p>
+        <table>
+          ${row('Listening', formatListeningReading(session.listening?.raw ?? null, session.listening?.scorable ?? null))}
+          ${row('Reading', formatListeningReading(session.reading?.raw ?? null, session.reading?.scorable ?? null))}
+          ${row('Writing', formatWriting(session.writing?.raw ?? null))}
+        </table>
+        <p class="footnote">Format: raw score / total &middot; OET scaled score (0&ndash;500) &middot; OET grade, per the OET Standard Grading &amp; Conversion Guide.</p>
+      </body>
+    </html>
+  `)
+  win.document.close()
+  win.focus()
+  win.print()
 }
 
 function TutorDashboard() {
@@ -45,6 +108,11 @@ function TutorDashboard() {
 
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [loadingResults, setLoadingResults] = useState(false)
+
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
+  const [editValues, setEditValues] = useState<EditValues | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState('')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -82,6 +150,7 @@ function TutorDashboard() {
       .from('results')
       .select(
         `
+        id,
         subtest_type,
         raw_score,
         scorable_count,
@@ -117,20 +186,17 @@ function TutorDashboard() {
         latestSubmittedAt: attempt.submitted_at,
         listening: null,
         reading: null,
-        hasWriting: false,
+        writing: null,
       }
 
       if (attempt.submitted_at > existing.latestSubmittedAt) {
         existing.latestSubmittedAt = attempt.submitted_at
       }
 
-      if (row.subtest_type === 'listening') {
-        existing.listening = { raw: row.raw_score, scorable: row.scorable_count ?? 0 }
-      } else if (row.subtest_type === 'reading') {
-        existing.reading = { raw: row.raw_score, scorable: row.scorable_count ?? 0 }
-      } else if (row.subtest_type === 'writing') {
-        existing.hasWriting = true
-      }
+      const result: SubtestResult = { resultId: row.id, raw: row.raw_score, scorable: row.scorable_count }
+      if (row.subtest_type === 'listening') existing.listening = result
+      else if (row.subtest_type === 'reading') existing.reading = result
+      else if (row.subtest_type === 'writing') existing.writing = result
 
       bySession.set(key, existing)
     }
@@ -189,161 +255,332 @@ function TutorDashboard() {
     setGenerating(false)
   }
 
-  if (checkingSession) return <p>Loading...</p>
+  function startEdit(s: SessionSummary) {
+    setEditingSessionId(s.sessionGroupId)
+    setEditValues(toEditValues(s))
+    setEditError('')
+  }
+
+  function cancelEdit() {
+    setEditingSessionId(null)
+    setEditValues(null)
+    setEditError('')
+  }
+
+  async function saveEdit(s: SessionSummary) {
+    if (!editValues) return
+    setSavingEdit(true)
+    setEditError('')
+
+    const toIntOrNull = (v: string) => (v.trim() === '' ? null : Number(v))
+
+    const updates: any[] = []
+
+    if (s.listening) {
+      updates.push(
+        supabase
+          .from('results')
+          .update({
+            raw_score: toIntOrNull(editValues.listeningRaw),
+            scorable_count: toIntOrNull(editValues.listeningScorable),
+          })
+          .eq('id', s.listening.resultId)
+      )
+    }
+    if (s.reading) {
+      updates.push(
+        supabase
+          .from('results')
+          .update({
+            raw_score: toIntOrNull(editValues.readingRaw),
+            scorable_count: toIntOrNull(editValues.readingScorable),
+          })
+          .eq('id', s.reading.resultId)
+      )
+    }
+    if (s.writing) {
+      updates.push(
+        supabase
+          .from('results')
+          .update({ raw_score: toIntOrNull(editValues.writingRaw) })
+          .eq('id', s.writing.resultId)
+      )
+    }
+
+    const results = await Promise.all(updates)
+    const failed = results.find((r) => r.error)
+
+    setSavingEdit(false)
+
+    if (failed) {
+      setEditError(failed.error.message)
+      return
+    }
+
+    cancelEdit()
+    loadResults()
+  }
+
+  if (checkingSession) {
+    return (
+      <>
+        <SiteNav />
+        <div className="tutor-dashboard-page">
+          <p>Loading…</p>
+        </div>
+      </>
+    )
+  }
 
   if (!session) {
     return (
-      <div style={{ maxWidth: 400, margin: '40px auto', padding: 24 }}>
-        <h2>Tutor Login</h2>
-        <form onSubmit={handleLogin}>
-          <div>
-            <label>Email</label>
-            <br />
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <>
+        <SiteNav />
+        <div className="tutor-dashboard-page">
+          <div className="tutor-login-card card">
+            <span className="eyebrow">Tutor access</span>
+            <h1>Tutor login</h1>
+            <form onSubmit={handleLogin} className="tutor-login-form">
+              <label>
+                Email
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+              </label>
+              <label>
+                Password
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                />
+              </label>
+              <button type="submit" className="btn-primary">
+                Log in
+              </button>
+            </form>
+            {loginError && <p className="tutor-error">{loginError}</p>}
           </div>
-          <div style={{ marginTop: 12 }}>
-            <label>Password</label>
-            <br />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          <button type="submit" style={{ marginTop: 16 }}>
-            Log in
-          </button>
-        </form>
-        {loginError && <p style={{ color: 'crimson' }}>{loginError}</p>}
-      </div>
+        </div>
+      </>
     )
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '40px auto', padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
+    <>
+      <SiteNav />
+      <div className="tutor-dashboard-page">
+        <div className="tutor-dashboard-header">
+          <div>
+            <span className="eyebrow">Tutor dashboard</span>
+            <h1>Manage tests &amp; results</h1>
+          </div>
+          <button className="btn-secondary" onClick={handleSignOut}>
+            Sign out
+          </button>
+        </div>
+
+        <div className="tutor-tabs">
           <button
+            className={`tutor-tab ${view === 'generate' ? 'active' : ''}`}
             onClick={() => setView('generate')}
-            style={{ fontWeight: view === 'generate' ? 'bold' : 'normal', marginRight: 12 }}
           >
-            Generate Code
+            Generate code
           </button>
           <button
+            className={`tutor-tab ${view === 'results' ? 'active' : ''}`}
             onClick={() => setView('results')}
-            style={{ fontWeight: view === 'results' ? 'bold' : 'normal' }}
           >
             Results
           </button>
         </div>
-        <button onClick={handleSignOut}>Sign out</button>
-      </div>
 
-      {view === 'generate' && (
-        <div style={{ maxWidth: 500, marginTop: 24 }}>
-          <h2>Generate Access Code</h2>
+        {view === 'generate' && (
+          <div className="tutor-panel card">
+            <h2>Generate access code</h2>
 
-          <div style={{ marginTop: 16 }}>
-            <label>Test</label>
-            <br />
-            <select value={selectedTestId} onChange={(e) => setSelectedTestId(e.target.value)}>
-              <option value="">Select a test...</option>
-              {tests.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.title}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <label>Valid for (hours)</label>
-            <br />
-            <input
-              type="number"
-              min={1}
-              value={validHours}
-              onChange={(e) => setValidHours(Number(e.target.value))}
-            />
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <label>Max number of students</label>
-            <br />
-            <input
-              type="number"
-              min={1}
-              value={maxUses}
-              onChange={(e) => setMaxUses(Number(e.target.value))}
-            />
-          </div>
-
-          <button onClick={handleGenerateCode} disabled={generating} style={{ marginTop: 16 }}>
-            {generating ? 'Generating...' : 'Generate Code'}
-          </button>
-
-          {generateError && <p style={{ color: 'crimson' }}>{generateError}</p>}
-
-          {generatedCode && (
-            <div style={{ marginTop: 24, padding: 16, background: '#f0f7ff' }}>
-              <p style={{ fontSize: 32, fontWeight: 'bold', letterSpacing: 4 }}>
-                {generatedCode.code}
-              </p>
-              <p>
-                Valid until: {new Date(generatedCode.expiresAt).toLocaleString()}
-                <br />
-                Max uses: {generatedCode.maxUses}
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {view === 'results' && (
-        <div style={{ marginTop: 24 }}>
-          <h2>Recent Results</h2>
-
-          {loadingResults ? (
-            <p>Loading...</p>
-          ) : sessions.length === 0 ? (
-            <p>No completed sessions yet.</p>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
-                  <th style={{ padding: 8 }}>Student</th>
-                  <th style={{ padding: 8 }}>Test</th>
-                  <th style={{ padding: 8 }}>Listening</th>
-                  <th style={{ padding: 8 }}>Reading</th>
-                  <th style={{ padding: 8 }}>Writing</th>
-                  <th style={{ padding: 8 }}>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sessions.map((s) => (
-                  <tr key={s.sessionGroupId} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: 8 }}>{s.studentName}</td>
-                    <td style={{ padding: 8 }}>{s.testTitle}</td>
-                    <td style={{ padding: 8 }}>
-                      {s.listening ? `${s.listening.raw} / ${s.listening.scorable}` : '—'}
-                    </td>
-                    <td style={{ padding: 8 }}>
-                      {s.reading ? `${s.reading.raw} / ${s.reading.scorable}` : '—'}
-                    </td>
-                    <td style={{ padding: 8 }}>
-                      {s.hasWriting ? 'Awaiting assessment' : '—'}
-                    </td>
-                    <td style={{ padding: 8 }}>
-                      {new Date(s.latestSubmittedAt).toLocaleDateString()}
-                    </td>
-                  </tr>
+            <div className="tutor-field">
+              <label>Test</label>
+              <select value={selectedTestId} onChange={(e) => setSelectedTestId(e.target.value)}>
+                <option value="">Select a test…</option>
+                {tests.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title}
+                  </option>
                 ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-    </div>
+              </select>
+            </div>
+
+            <div className="tutor-field-row">
+              <div className="tutor-field">
+                <label>Valid for (hours)</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={validHours}
+                  onChange={(e) => setValidHours(Number(e.target.value))}
+                />
+              </div>
+              <div className="tutor-field">
+                <label>Max number of students</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={maxUses}
+                  onChange={(e) => setMaxUses(Number(e.target.value))}
+                />
+              </div>
+            </div>
+
+            <button className="btn-primary" onClick={handleGenerateCode} disabled={generating}>
+              {generating ? 'Generating…' : 'Generate code'}
+            </button>
+
+            {generateError && <p className="tutor-error">{generateError}</p>}
+
+            {generatedCode && (
+              <div className="tutor-generated-code">
+                <strong>{generatedCode.code}</strong>
+                <span>
+                  Valid until {new Date(generatedCode.expiresAt).toLocaleString()} · max {generatedCode.maxUses}{' '}
+                  students
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {view === 'results' && (
+          <div className="tutor-panel card">
+            <h2>Recent results</h2>
+            <p className="tutor-panel-note">
+              Format: raw score / total &middot; OET scaled score (0&ndash;500) &middot; OET grade (A/B/C+/C/D/E),
+              per the OET Standard Grading &amp; Conversion Guide. Writing needs a raw rubric score (out of 38)
+              entered manually until AI grading is wired up.
+            </p>
+
+            {loadingResults ? (
+              <p>Loading…</p>
+            ) : sessions.length === 0 ? (
+              <p>No completed sessions yet.</p>
+            ) : (
+              <div className="tutor-table-wrap">
+                <table className="tutor-table">
+                  <thead>
+                    <tr>
+                      <th>Student</th>
+                      <th>Test</th>
+                      <th>Listening</th>
+                      <th>Reading</th>
+                      <th>Writing</th>
+                      <th>Date</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sessions.map((s) => {
+                      const editing = editingSessionId === s.sessionGroupId
+                      return (
+                        <Fragment key={s.sessionGroupId}>
+                          <tr>
+                            <td>{s.studentName}</td>
+                            <td>{s.testTitle}</td>
+                            <td>
+                              {editing && editValues ? (
+                                <span className="tutor-score-edit">
+                                  <input
+                                    value={editValues.listeningRaw}
+                                    onChange={(e) => setEditValues({ ...editValues, listeningRaw: e.target.value })}
+                                    disabled={!s.listening}
+                                  />
+                                  /
+                                  <input
+                                    value={editValues.listeningScorable}
+                                    onChange={(e) =>
+                                      setEditValues({ ...editValues, listeningScorable: e.target.value })
+                                    }
+                                    disabled={!s.listening}
+                                  />
+                                </span>
+                              ) : (
+                                formatListeningReading(s.listening?.raw ?? null, s.listening?.scorable ?? null)
+                              )}
+                            </td>
+                            <td>
+                              {editing && editValues ? (
+                                <span className="tutor-score-edit">
+                                  <input
+                                    value={editValues.readingRaw}
+                                    onChange={(e) => setEditValues({ ...editValues, readingRaw: e.target.value })}
+                                    disabled={!s.reading}
+                                  />
+                                  /
+                                  <input
+                                    value={editValues.readingScorable}
+                                    onChange={(e) =>
+                                      setEditValues({ ...editValues, readingScorable: e.target.value })
+                                    }
+                                    disabled={!s.reading}
+                                  />
+                                </span>
+                              ) : (
+                                formatListeningReading(s.reading?.raw ?? null, s.reading?.scorable ?? null)
+                              )}
+                            </td>
+                            <td>
+                              {editing && editValues ? (
+                                <span className="tutor-score-edit">
+                                  <input
+                                    value={editValues.writingRaw}
+                                    onChange={(e) => setEditValues({ ...editValues, writingRaw: e.target.value })}
+                                    disabled={!s.writing}
+                                    placeholder="/ 38"
+                                  />
+                                </span>
+                              ) : (
+                                formatWriting(s.writing?.raw ?? null)
+                              )}
+                            </td>
+                            <td>{new Date(s.latestSubmittedAt).toLocaleDateString()}</td>
+                            <td className="tutor-row-actions">
+                              {editing ? (
+                                <>
+                                  <button className="btn-primary" onClick={() => saveEdit(s)} disabled={savingEdit}>
+                                    {savingEdit ? 'Saving…' : 'Save'}
+                                  </button>
+                                  <button className="btn-secondary" onClick={cancelEdit} disabled={savingEdit}>
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button className="btn-secondary" onClick={() => startEdit(s)}>
+                                    Edit
+                                  </button>
+                                  <button className="btn-secondary" onClick={() => openPrintableResult(s)}>
+                                    Print / download
+                                  </button>
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                          {editing && editError && (
+                            <tr>
+                              <td colSpan={7} className="tutor-error">
+                                {editError}
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 
