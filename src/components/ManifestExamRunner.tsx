@@ -256,6 +256,10 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
   const [pdfOpen, setPdfOpen] = useState(false)
   const [pdfPinned, setPdfPinned] = useState(false)
   const [pdfPanelWidth, setPdfPanelWidth] = useState(480)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  const saveAttemptRef = useRef(false)
 
   const audioRef = useRef<AudioPlayerHandle | null>(null)
   const advanceRef = useRef<() => void>(() => {})
