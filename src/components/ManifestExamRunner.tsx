@@ -314,9 +314,38 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
     setPdfPinned(false)
   }
 
+  async function saveAttempt() {
+    if (saveAttemptRef.current) return true
+    setSaving(true)
+    setSaveError(null)
+
+    try {
+      const { error } = await supabase.rpc('save_manifest_attempt', {
+        p_test_id: test.id,
+        p_student_name: studentName,
+        p_answers: answers,
+      })
+
+      if (error) throw new Error(error.message)
+      saveAttemptRef.current = true
+      return true
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to save your test results.'
+      setSaveError(message)
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function finishTest() {
+    const saved = await saveAttempt()
+    if (saved) setCompleted(true)
+  }
+
   function actuallyAdvance() {
     if (page.isFinalPage) {
-      setCompleted(true)
+      void finishTest()
       return
     }
     goToPage(pageIndex + 1)
@@ -326,7 +355,7 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
     let i = pageIndex
     while (i < pages.length - 1 && !pages[i].isStageLastPage) i++
     if (i >= pages.length - 1) {
-      setCompleted(true)
+      void finishTest()
       return
     }
     goToPage(i + 1)
@@ -355,9 +384,27 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
     advanceRef.current()
   }
 
-  const unansweredInStage = page
-    ? page.stageQuestions.filter((q: any) => !answers[q.id]?.trim()).length
-    : 0
+  const unansweredInStage = useMemo(() => {
+    if (!page) return 0
+
+    let questions = page.stageQuestions
+
+    if (page.kind === 'reading_extract') {
+      const docId = page.data?.doc?.id
+      const docIndex = (page.stage.documents ?? []).findIndex((doc: any) => doc.id === docId)
+      const allQuestions = page.stage.questions ?? []
+      const byExtract = allQuestions.filter((q: any) => q.extract_id === docId)
+
+      questions = byExtract.length
+        ? byExtract
+        : allQuestions.filter((q: any) => {
+            const order = Number(q.order_index)
+            return docIndex === 0 ? order >= 7 && order <= 14 : order >= 15 && order <= 22
+          })
+    }
+
+    return questions.filter((q: any) => !answers[q.id]?.trim()).length
+  }, [page, answers])
 
   function handleNextClick() {
     if (!page) return
@@ -410,7 +457,7 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
           <span className="eyebrow">Test complete</span>
           <h1>Well done, {studentName}.</h1>
           <p>You have completed the {test.title} practice examination.</p>
-          <p className="muted">Your responses have been kept for this practice session. Scoring will be added once our verified answer key is prepared.</p>
+          <p className="muted">Your responses have been saved to your test attempt. Scoring will be added once our verified answer key is prepared.</p>
           <div className="completion-stat"><strong>{Object.keys(answers).length}</strong><span>responses recorded</span></div>
           <div className="completion-stat"><strong>{questionCount}</strong><span>questions in this exam</span></div>
         </div>
@@ -551,12 +598,28 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
             <button className="btn-secondary" onClick={openPdf} style={{ marginBottom: 16 }}>
               View {page.data.doc.title ?? 'exam document'}
             </button>
-            {(page.stage.questions ?? []).map((q: any) => (
-              <div className="manifest-question-card" key={q.id}>
-                <h3>{q.order_index}. {questionText(q)}</h3>
-                <QuestionInput q={q} value={answers[q.id] ?? ''} onChange={(v) => setAnswer(q.id, v)} />
-              </div>
-            ))}
+            {(() => {
+              const docId = page.data.doc.id
+              const docIndex = (page.stage.documents ?? []).findIndex((doc: any) => doc.id === docId)
+              const allQuestions = page.stage.questions ?? []
+              const extractQuestions = allQuestions.filter((q: any) => q.extract_id === docId)
+
+              // Older manifests may not have extract_id. In that case, Reading C
+              // is 16 questions split evenly across its two PDF extracts.
+              const questions = extractQuestions.length
+                ? extractQuestions
+                : allQuestions.filter((q: any) => {
+                    const order = Number(q.order_index)
+                    return docIndex === 0 ? order >= 7 && order <= 14 : order >= 15 && order <= 22
+                  })
+
+              return questions.map((q: any) => (
+                <div className="manifest-question-card" key={q.id}>
+                  <h3>{q.order_index}. {questionText(q)}</h3>
+                  <QuestionInput q={q} value={answers[q.id] ?? ''} onChange={(v) => setAnswer(q.id, v)} />
+                </div>
+              ))
+            })()}
           </div>
         )}
 
@@ -605,6 +668,22 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
             setPdfPinned(false)
           }}
         />
+      )}
+
+      {saving && (
+        <div className="card" style={{ position: 'fixed', inset: 'auto 24px 24px auto', zIndex: 1000, padding: 16 }}>
+          Saving your test results…
+        </div>
+      )}
+
+      {saveError && !completed && (
+        <div className="card" style={{ position: 'fixed', inset: 'auto 24px 24px auto', zIndex: 1000, padding: 16 }}>
+          <strong>Could not save your test results.</strong>
+          <p className="muted">{saveError}</p>
+          <button className="btn-primary" onClick={() => void finishTest()} disabled={saving}>
+            {saving ? 'Saving…' : 'Try again'}
+          </button>
+        </div>
       )}
 
       <ConfirmModal
