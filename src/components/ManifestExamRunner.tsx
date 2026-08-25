@@ -16,6 +16,38 @@ function fileUrl(testId: string, bucket: string, fileRef: string) {
   return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl
 }
 
+// ============================================================
+// Asset preloading. The exam pulls in listening audio and PDF
+// documents as it goes, which leaves it exposed to mid-test network
+// blips. Instead we walk the whole manifest up front, fetch every
+// audio/document file_ref as a blob, and hand back local blob: URLs
+// -- once preload finishes, nothing in the exam UI touches the
+// network again until the final submit.
+// ============================================================
+type AssetRef = { bucket: string; fileRef: string }
+
+function collectAssetRefs(stages: any[]): AssetRef[] {
+  const refs: AssetRef[] = []
+  const seen = new Set<string>()
+  function add(bucket: string, fileRef: string | undefined | null) {
+    if (!fileRef) return
+    const key = `${bucket}:${fileRef}`
+    if (seen.has(key)) return
+    seen.add(key)
+    refs.push({ bucket, fileRef })
+  }
+  for (const stage of stages ?? []) {
+    add('listening-audio', stage.audio?.file_ref)
+    for (const ex of stage.extracts ?? []) {
+      add('listening-audio', ex.file_ref)
+      for (const q of ex.questions ?? []) add('listening-audio', q.audio?.file_ref)
+    }
+    for (const q of stage.questions ?? []) add('listening-audio', q.audio?.file_ref)
+    for (const doc of stage.documents ?? []) add('exam-documents', doc.file_ref)
+  }
+  return refs
+}
+
 function questionText(q: any) {
   return q.question ?? q.prompt ?? q.label ?? ''
 }
@@ -265,6 +297,78 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
   const advanceRef = useRef<() => void>(() => {})
   const lastAutoPlayedKey = useRef<string | null>(null)
 
+  // ---- asset preloading ----
+  const assetRefs = useMemo(() => collectAssetRefs(stages), [stages])
+  const [assetMap, setAssetMap] = useState<Map<string, string>>(new Map())
+  const assetMapRef = useRef<Map<string, string>>(new Map())
+  const [assetsReady, setAssetsReady] = useState(false)
+  const [assetProgress, setAssetProgress] = useState({ loaded: 0, total: 0 })
+  const [assetLoadError, setAssetLoadError] = useState<string | null>(null)
+  const [assetRetryToken, setAssetRetryToken] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    setAssetsReady(false)
+    setAssetLoadError(null)
+    setAssetProgress({ loaded: 0, total: assetRefs.length })
+
+    if (assetRefs.length === 0) {
+      setAssetsReady(true)
+      return
+    }
+
+    async function loadAll() {
+      const map = new Map<string, string>()
+      let loaded = 0
+      let hadError = false
+      await Promise.all(
+        assetRefs.map(async ({ bucket, fileRef }) => {
+          try {
+            const res = await fetch(fileUrl(test.id, bucket, fileRef))
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            const blob = await res.blob()
+            if (cancelled) return
+            map.set(`${bucket}:${fileRef}`, URL.createObjectURL(blob))
+          } catch (err) {
+            hadError = true
+            console.warn('Failed to preload exam asset', bucket, fileRef, err)
+          } finally {
+            loaded++
+            if (!cancelled) setAssetProgress({ loaded, total: assetRefs.length })
+          }
+        })
+      )
+      if (cancelled) return
+      // Revoke anything from a previous attempt before swapping in the new map.
+      for (const url of assetMapRef.current.values()) URL.revokeObjectURL(url)
+      assetMapRef.current = map
+      setAssetMap(map)
+      if (hadError) {
+        setAssetLoadError('Some exam files could not be downloaded. Check your connection and try again.')
+      } else {
+        setAssetsReady(true)
+      }
+    }
+
+    void loadAll()
+
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assetRefs, assetRetryToken])
+
+  // Revoke every blob URL on unmount (leaving the exam / closing the tab).
+  useEffect(() => {
+    return () => {
+      for (const url of assetMapRef.current.values()) URL.revokeObjectURL(url)
+    }
+  }, [])
+
+  function resolvedUrl(bucket: string, fileRef: string) {
+    return assetMap.get(`${bucket}:${fileRef}`) ?? fileUrl(test.id, bucket, fileRef)
+  }
+
   const page = pages[pageIndex]
 
   const setAnswer = (id: string, value: string) => setAnswers((prev) => ({ ...prev, [id]: value }))
@@ -454,6 +558,33 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
     return n
   }, [stages])
 
+  if (!assetsReady) {
+    return (
+      <div className="manifest-complete-page">
+        <div className="card">
+          <span className="eyebrow">Preparing your exam</span>
+          <h1>Downloading exam files…</h1>
+          <p className="muted">
+            All audio and documents are downloaded now, before you begin, so the test won't be
+            interrupted by your internet connection partway through.
+          </p>
+          <div className="completion-stat">
+            <strong>{assetProgress.loaded} / {assetProgress.total}</strong>
+            <span>files ready</span>
+          </div>
+          {assetLoadError && (
+            <>
+              <p className="muted">{assetLoadError}</p>
+              <button className="btn-primary" onClick={() => setAssetRetryToken((n) => n + 1)}>
+                Try again
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   if (completed) {
     return (
       <div className="manifest-complete-page">
@@ -540,7 +671,7 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
                 .map((block, i) => renderIntroBlock(block, i))}
             </div>
             {page.stage.audio?.file_ref && (
-              <AudioPlayer ref={audioRef} src={fileUrl(test.id, 'listening-audio', page.stage.audio.file_ref)} />
+              <AudioPlayer ref={audioRef} src={resolvedUrl('listening-audio', page.stage.audio.file_ref)} />
             )}
           </div>
         )}
@@ -555,7 +686,7 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
         {page.kind === 'listening_extract' && (
           <div className="manifest-extract">
             <h2>{page.data.title ?? `Extract ${page.data.order_index}`}</h2>
-            <AudioPlayer ref={audioRef} src={fileUrl(test.id, 'listening-audio', page.data.file_ref)} />
+            <AudioPlayer ref={audioRef} src={resolvedUrl('listening-audio', page.data.file_ref)} />
             {page.data.instructions && <p>{page.data.instructions}</p>}
             {(page.data.questions ?? []).map((q: any) => (
               <div className="manifest-question-card" key={q.id}>
@@ -569,7 +700,7 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
 
         {page.kind === 'listening_question' && (
           <div className="manifest-question-card">
-            <AudioPlayer ref={audioRef} src={fileUrl(test.id, 'listening-audio', page.data.audio.file_ref)} />
+            <AudioPlayer ref={audioRef} src={resolvedUrl('listening-audio', page.data.audio.file_ref)} />
             <h3>{page.data.order_index}. {questionText(page.data)}</h3>
             <QuestionInput q={page.data} value={answers[page.data.id] ?? ''} onChange={(v) => setAnswer(page.data.id, v)} />
           </div>
@@ -661,7 +792,7 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
       {pdfOpen && currentPdfDoc && (
         <DraggablePdfWindow
           title={currentPdfDoc.title ?? 'Exam document'}
-          src={`${fileUrl(test.id, 'exam-documents', currentPdfDoc.file_ref)}${
+          src={`${resolvedUrl('exam-documents', currentPdfDoc.file_ref)}${
             currentPdfDoc.page_start ? `#page=${currentPdfDoc.page_start}` : ''
           }`}
           pinned={pdfPinned}
