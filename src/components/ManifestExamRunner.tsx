@@ -17,6 +17,60 @@ function fileUrl(testId: string, bucket: string, fileRef: string) {
 }
 
 // ============================================================
+// Resume support. If the tab is closed, the browser crashes, or the
+// connection drops mid-exam, everything currently lives only in React
+// state and would be lost. We mirror the parts that matter -- which
+// page the student is on, their answers so far, and *when* each
+// section timer actually started (a wall-clock timestamp, not a
+// ticking counter, so the remaining time is still correct however
+// long the student was away) -- to localStorage, and restore from it
+// on mount. Cleared once the attempt is actually submitted.
+// ============================================================
+type SavedProgress = { pageIndex: number; answers: Record<string, string>; timerStarts: Record<string, number> }
+
+function progressStorageKey(testId: string, studentName: string) {
+  return `oet-manifest-progress:${testId}:${studentName}`
+}
+
+function loadSavedProgress(testId: string, studentName: string): SavedProgress | null {
+  try {
+    const raw = window.localStorage.getItem(progressStorageKey(testId, studentName))
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return null
+    return {
+      pageIndex: typeof parsed.pageIndex === 'number' ? parsed.pageIndex : 0,
+      answers: parsed.answers && typeof parsed.answers === 'object' ? parsed.answers : {},
+      timerStarts: parsed.timerStarts && typeof parsed.timerStarts === 'object' ? parsed.timerStarts : {},
+    }
+  } catch {
+    return null
+  }
+}
+
+function saveProgress(testId: string, studentName: string, progress: SavedProgress) {
+  try {
+    window.localStorage.setItem(progressStorageKey(testId, studentName), JSON.stringify(progress))
+  } catch {
+    // localStorage unavailable (private browsing, storage full, etc.) -- the
+    // exam still runs fine, it just won't be resumable after a reload.
+  }
+}
+
+function clearSavedProgress(testId: string, studentName: string) {
+  try {
+    window.localStorage.removeItem(progressStorageKey(testId, studentName))
+  } catch {
+    // ignore
+  }
+}
+
+function remainingFrom(durationSeconds: number, startedAt: number) {
+  const elapsed = Math.floor((Date.now() - startedAt) / 1000)
+  return Math.max(0, durationSeconds - elapsed)
+}
+
+// ============================================================
 // Asset preloading. The exam pulls in listening audio and PDF
 // documents as it goes, which leaves it exposed to mid-test network
 // blips. Instead we walk the whole manifest up front, fetch every
@@ -280,13 +334,21 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
   const stages: any[] = test.manifest?.exam?.stages ?? []
   const pages = useMemo(() => buildPages(stages), [stages])
 
-  const [pageIndex, setPageIndex] = useState(0)
-  const [answers, setAnswers] = useState<Record<string, string>>({})
+  // Loaded once, synchronously, before first render -- used to seed the
+  // lazy initializers below so a resumed exam never flashes page 1 first.
+  const savedProgress = useMemo(() => loadSavedProgress(test.id, studentName), [test.id, studentName])
+
+  const [pageIndex, setPageIndex] = useState(() =>
+    savedProgress && savedProgress.pageIndex >= 0 && savedProgress.pageIndex < pages.length ? savedProgress.pageIndex : 0
+  )
+  const [answers, setAnswers] = useState<Record<string, string>>(() => savedProgress?.answers ?? {})
+  const [timerStarts, setTimerStarts] = useState<Record<string, number>>(() => savedProgress?.timerStarts ?? {})
   const [timeLeft, setTimeLeft] = useState<number | null>(null)
   const [completed, setCompleted] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [pendingAdvance, setPendingAdvance] = useState<'next' | 'finish' | null>(null)
   const [timeUpOpen, setTimeUpOpen] = useState(false)
+  const [reloadConfirmOpen, setReloadConfirmOpen] = useState(false)
   const [pdfOpen, setPdfOpen] = useState(false)
   const [pdfPinned, setPdfPinned] = useState(false)
   const [pdfPanelWidth, setPdfPanelWidth] = useState(480)
@@ -307,6 +369,14 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
   const [assetProgress, setAssetProgress] = useState({ loaded: 0, total: 0 })
   const [assetLoadError, setAssetLoadError] = useState<string | null>(null)
   const [assetRetryToken, setAssetRetryToken] = useState(0)
+  // Gates entry into the exam behind an explicit click once assets are
+  // ready. Without this, page 0 (listening_a_intro) renders as soon as the
+  // async preload fetch finishes, and its audio autoplay attempt fires with
+  // no recent user gesture behind it -- browsers silently block that first
+  // play() call. Every later audio plays fine because it's triggered by a
+  // fresh "Next" click. Gating the first render behind a real click gives
+  // the first play() the same direct-gesture context every later one has.
+  const [started, setStarted] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -387,12 +457,46 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
   }, [pages])
 
   useEffect(() => {
-    if (pages.length) {
-      const key = pages[0].timerKey
-      setTimeLeft(key ? durationByTimerKey.get(key) ?? null : null)
+    // NOTE: this reads `pageIndex` directly rather than `pages[0]` so a
+    // resumed exam (pageIndex restored from localStorage) sets up the
+    // correct section's timer on first render, not Part A's.
+    if (!pages.length) return
+    const initialPage = pages[pageIndex]
+    const key = initialPage?.timerKey
+    if (!key) {
+      setTimeLeft(null)
+      return
+    }
+    const duration = durationByTimerKey.get(key)
+    if (duration == null) {
+      setTimeLeft(null)
+      return
+    }
+    const existingStart = timerStarts[key]
+    if (existingStart) {
+      setTimeLeft(remainingFrom(duration, existingStart))
+    } else {
+      const startedAt = Date.now()
+      setTimerStarts((prev) => ({ ...prev, [key]: startedAt }))
+      setTimeLeft(duration)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Mirror page position, answers and timer start times to localStorage so
+  // the exam can pick back up after a reload/crash/dropped connection.
+  // Debounced so rapid typing (the writing task) doesn't hammer storage.
+  const persistTimeoutRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (completed) return
+    if (persistTimeoutRef.current) window.clearTimeout(persistTimeoutRef.current)
+    persistTimeoutRef.current = window.setTimeout(() => {
+      saveProgress(test.id, studentName, { pageIndex, answers, timerStarts })
+    }, 400)
+    return () => {
+      if (persistTimeoutRef.current) window.clearTimeout(persistTimeoutRef.current)
+    }
+  }, [pageIndex, answers, timerStarts, completed, test.id, studentName])
 
   useEffect(() => {
     if (!page) return
@@ -418,7 +522,17 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
     const prevKey = page?.timerKey
     setPageIndex(index)
     if (target.timerKey !== prevKey) {
-      setTimeLeft(target.timerKey ? durationByTimerKey.get(target.timerKey) ?? null : null)
+      const duration = target.timerKey ? durationByTimerKey.get(target.timerKey) ?? null : null
+      if (target.timerKey && duration != null) {
+        // Forward-only navigation, so entering a timerKey for the first
+        // time always means a fresh start (this also overwrites any stale
+        // start left over from an abandoned earlier attempt at this test).
+        const startedAt = Date.now()
+        setTimerStarts((prev) => ({ ...prev, [target.timerKey as string]: startedAt }))
+        setTimeLeft(duration)
+      } else {
+        setTimeLeft(null)
+      }
     }
     setPdfOpen(false)
     setPdfPinned(false)
@@ -450,7 +564,10 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
 
   async function finishTest() {
     const saved = await saveAttempt()
-    if (saved) setCompleted(true)
+    if (saved) {
+      setCompleted(true)
+      clearSavedProgress(test.id, studentName)
+    }
   }
 
   function actuallyAdvance() {
@@ -560,15 +677,17 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
     return n
   }, [stages])
 
-  if (!assetsReady) {
+  if (!assetsReady || !started) {
+    const isResuming = Boolean(savedProgress && savedProgress.pageIndex > 0)
     return (
       <div className="manifest-complete-page">
         <div className="card">
           <span className="eyebrow">Preparing your exam</span>
-          <h1>Downloading exam files…</h1>
+          <h1>{assetsReady ? (isResuming ? 'Welcome back' : 'Your exam is ready') : 'Downloading exam files…'}</h1>
           <p className="muted">
-            All audio and documents are downloaded now, before you begin, so the test won't be
-            interrupted by your internet connection partway through.
+            {assetsReady && isResuming
+              ? "We found your progress from earlier in this exam — you'll pick up right where you left off, with your timer continuing from where it stood."
+              : "All audio and documents are downloaded now, before you begin, so the test won't be interrupted by your internet connection partway through."}
           </p>
           <div className="completion-stat">
             <strong>{assetProgress.loaded} / {assetProgress.total}</strong>
@@ -581,6 +700,11 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
                 Try again
               </button>
             </>
+          )}
+          {assetsReady && !assetLoadError && (
+            <button className="btn-primary" onClick={() => setStarted(true)}>
+              Begin Exam
+            </button>
           )}
         </div>
       </div>
@@ -807,6 +931,16 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
         />
       )}
 
+      {!completed && (
+        <button
+          className="btn-secondary"
+          style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 1000 }}
+          onClick={() => setReloadConfirmOpen(true)}
+        >
+          Reload Exam
+        </button>
+      )}
+
       {saving && (
         <div className="card" style={{ position: 'fixed', inset: 'auto 24px 24px auto', zIndex: 1000, padding: 16 }}>
           Saving your test results…
@@ -844,6 +978,17 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
         message={timeUpMessage}
         confirmLabel="Continue"
         onConfirm={handleTimeUpContinue}
+      />
+
+      <ConfirmModal
+        open={reloadConfirmOpen}
+        variant="plain"
+        title="Reload Exam"
+        message="This reloads the page. Your answers and section timer are saved and will be restored to exactly where you are now — use this if the test seems stuck or audio won't play."
+        confirmLabel="Reload"
+        cancelLabel="Cancel"
+        onConfirm={() => window.location.reload()}
+        onCancel={() => setReloadConfirmOpen(false)}
       />
     </>
   )
