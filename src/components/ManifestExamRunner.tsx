@@ -458,6 +458,17 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
   }, [pages])
 
   useEffect(() => {
+    // Gated on `started`, not mount: this component is already mounted
+    // and running its effects while the "Downloading exam files…" / "Begin
+    // Exam" screen is showing (that screen is just an early return further
+    // down, not a delay in mounting). Seeding the first section's timer on
+    // mount meant it started counting down during the asset download --
+    // often burning through the entire intro allotment before the student
+    // ever saw a question, so "Begin Exam" landed straight on a time's-up
+    // dialog. Waiting for `started` ties the first timer to the same real
+    // click that gates the first audio autoplay, so the clock and the
+    // content the student can actually see start together.
+    if (!started) return
     // NOTE: this reads `pageIndex` directly rather than `pages[0]` so a
     // resumed exam (pageIndex restored from localStorage) sets up the
     // correct section's timer on first render, not Part A's.
@@ -482,7 +493,7 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
       setTimeLeft(duration)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [started])
 
   // Mirror page position, answers and timer start times to localStorage so
   // the exam can pick back up after a reload/crash/dropped connection.
