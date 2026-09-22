@@ -4,6 +4,7 @@ import ExamChrome, { type ExamNavGroup } from './ExamChrome'
 import ConfirmModal from './ConfirmModal'
 import AudioPlayer, { type AudioPlayerHandle } from './AudioPlayer'
 import DraggablePdfWindow from './DraggablePdfWindow'
+import { clearExamSession } from '../lib/examSession'
 
 function formatTime(total: number) {
   const m = Math.floor(total / 60)
@@ -567,6 +568,7 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
     if (saved) {
       setCompleted(true)
       clearSavedProgress(test.id, studentName)
+      clearExamSession()
     }
   }
 

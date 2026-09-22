@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useEffect,
   useImperativeHandle,
   useRef,
   useState,
@@ -23,6 +24,23 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     const [status, setStatus] = useState<
       'not_played' | 'playing' | 'finished'
     >('not_played')
+
+    // IMPORTANT: this component is NOT remounted when the exam moves from
+    // one extract/question to the next -- React reuses the same instance
+    // and just updates `src`, because it sits in the same JSX slot every
+    // time. Without this effect, `status` from the PREVIOUS audio (which
+    // reaches 'finished' when it ends) would carry over and permanently
+    // block `play()` below for every audio after the first one in a
+    // section. Resetting on every src change gives each new clip a clean
+    // 'not_played' state, exactly as if it were a fresh player.
+    useEffect(() => {
+      setStatus('not_played')
+      const audio = audioRef.current
+      if (audio) {
+        audio.pause()
+        audio.currentTime = 0
+      }
+    }, [src])
 
     useImperativeHandle(ref, () => ({
       play: () => {
