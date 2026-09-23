@@ -511,6 +511,19 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
   }, [pageIndex, answers, timerStarts, completed, test.id, studentName])
 
   useEffect(() => {
+    // Depends on `started` too, not just `page`. This effect fires on
+    // initial mount -- while the "Downloading exam files…" screen is up
+    // and `<AudioPlayer>` hasn't rendered yet, so `audioRef.current` is
+    // still null and the play() call below silently does nothing. If the
+    // effect only depended on `page`, that first no-op firing would still
+    // stamp `lastAutoPlayedKey` for the intro page, and since `page`
+    // itself never changes between that mount and the "Begin Exam" click,
+    // the effect would never run again -- leaving the very first audio
+    // sitting fully mounted and ready with nothing ever calling play() on
+    // it. Requiring `started` means the pre-mount firing bails out before
+    // touching `lastAutoPlayedKey`, and the real attempt happens once
+    // `started` flips true and the player actually exists.
+    if (!started) return
     if (!page) return
     const hasAudio =
       page.kind === 'listening_extract' ||
@@ -522,7 +535,7 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
         setTimeout(() => audioRef.current?.play(), 50)
       }
     }
-  }, [page])
+  }, [page, started])
 
   function openPdf() {
     setPdfOpen(true)
