@@ -385,7 +385,7 @@ function TutorDashboard() {
   useEffect(() => {
     async function checkRole(userId: string) {
       const { data } = await supabase.from('profiles').select('role').eq('id', userId).single()
-      setIsTutor(data?.role === 'tutor')
+      setIsTutor(data?.role === 'tutor' || data?.role === 'admin')
       setCheckingSession(false)
     }
 

@@ -1337,6 +1337,13 @@ function Homepage() {
             >
               Admin upload
             </Link>
+
+            <Link
+              to="/admin-panel"
+              style={{ textDecoration: 'none' }}
+            >
+              Admin panel
+            </Link>
           </div>
         </div>
 

@@ -4,6 +4,8 @@ import ExamFlow from './components/ExamFlow'
 import TutorDashboard from './components/TutorDashboard'
 import AdminUpload from './components/AdminUpload'
 import RequireTutorLogin from './components/RequireTutorLogin'
+import RequireAdminLogin from './components/RequireAdminLogin'
+import AdminPanel from './components/AdminPanel'
 import StudentAuthPage from './components/StudentAuthPage'
 import ExamCatalog from './components/ExamCatalog'
 import StudentAccount from './components/StudentAccount'
@@ -24,6 +26,14 @@ function App() {
             <RequireTutorLogin>
               <AdminUpload />
             </RequireTutorLogin>
+          }
+        />
+        <Route
+          path="/admin-panel"
+          element={
+            <RequireAdminLogin>
+              <AdminPanel />
+            </RequireAdminLogin>
           }
         />
       </Routes>
