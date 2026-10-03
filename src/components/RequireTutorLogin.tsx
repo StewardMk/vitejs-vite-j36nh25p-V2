@@ -7,19 +7,32 @@ interface RequireTutorLoginProps {
 
 function RequireTutorLogin({ children }: RequireTutorLoginProps) {
   const [session, setSession] = useState<any>(null)
+  const [isTutor, setIsTutor] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loginError, setLoginError] = useState('')
 
   useEffect(() => {
+    async function checkRole(userId: string) {
+      const { data } = await supabase.from('profiles').select('role').eq('id', userId).single()
+      setIsTutor(data?.role === 'tutor')
+      setCheckingSession(false)
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
-      setCheckingSession(false)
+      if (data.session) checkRole(data.session.user.id)
+      else setCheckingSession(false)
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession)
+      if (newSession) checkRole(newSession.user.id)
+      else {
+        setIsTutor(false)
+        setCheckingSession(false)
+      }
     })
 
     return () => listener.subscription.unsubscribe()
@@ -62,6 +75,18 @@ function RequireTutorLogin({ children }: RequireTutorLoginProps) {
           </button>
         </form>
         {loginError && <p style={{ color: 'crimson' }}>{loginError}</p>}
+      </div>
+    )
+  }
+
+  if (!isTutor) {
+    return (
+      <div style={{ maxWidth: 400, margin: '40px auto', padding: 24, textAlign: 'center' }}>
+        <h2>Tutor access only</h2>
+        <p style={{ color: 'crimson' }}>
+          This account isn't set up as a tutor account, so it can't access this page.
+        </p>
+        <button onClick={handleSignOut}>Sign out</button>
       </div>
     )
   }

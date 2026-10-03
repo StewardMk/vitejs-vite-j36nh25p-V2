@@ -513,12 +513,12 @@ function Homepage() {
 
           <a href="#how-it-works">How it works</a>
 
-          <Link to="/tutor">
-            <button className="btn-secondary">Tutor login</button>
+          <Link to="/login">
+            <button className="btn-secondary">Log in</button>
           </Link>
 
-          <Link to="/admin">
-            <button className="btn-primary" style={{ padding: '10px 18px' }}>Admin upload</button>
+          <Link to="/exams">
+            <button className="btn-primary" style={{ padding: '10px 18px' }}>Browse exams</button>
           </Link>
         </div>
       </nav>
@@ -549,7 +549,7 @@ function Homepage() {
 
           <div className="hero-cta-row">
             <Link
-              to="/exam"
+              to="/exams"
               style={{
                 textDecoration: 'none',
               }}
@@ -1046,7 +1046,7 @@ function Homepage() {
             </p>
 
             <Link
-              to="/exam"
+              to="/exams"
               style={{
                 textDecoration: 'none',
               }}
