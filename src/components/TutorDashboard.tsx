@@ -29,6 +29,166 @@ interface SessionSummary {
   writing: SubtestResult | null
   writingPrompt: string | null
   essayText: string | null
+  manifest: any
+  answers: Record<string, string> | null
+}
+
+interface ComparisonRow {
+  orderIndex: number
+  subtest: string
+  questionText: string
+  studentDisplay: string
+  correctDisplay: string
+  isCorrect: boolean | null
+}
+
+function questionPrompt(q: any): string {
+  return q.question ?? q.prompt ?? q.label ?? ''
+}
+
+function resolveOptionText(q: any, value: string | null | undefined): string {
+  if (value === null || value === undefined || value === '') return ''
+  const opt = q.options?.find((o: any) => o.id === value)
+  return opt ? `${opt.id} — ${opt.text}` : value
+}
+
+function displayAnswer(q: any, raw: string | null | undefined): string {
+  if (raw === null || raw === undefined || raw === '') return 'No answer'
+  if (q.question_type === 'multiple_choice') return resolveOptionText(q, raw)
+  return raw
+}
+
+function answersMatch(q: any, raw: string | null | undefined): boolean | null {
+  if (q.correct_answer === null || q.correct_answer === undefined) return null
+  if (raw === null || raw === undefined || raw === '') return false
+  return raw.toString().trim().toLowerCase() === String(q.correct_answer).trim().toLowerCase()
+}
+
+// Walks every scorable (non-writing) question in the manifest and pairs it
+// with the student's submitted answer, for the tutor's side-by-side view.
+function collectComparisonRows(manifest: any, answers: Record<string, string>): ComparisonRow[] {
+  const rows: ComparisonRow[] = []
+  const stages = manifest?.exam?.stages ?? []
+
+  for (const stage of stages) {
+    if (stage.presentation === 'writing' || stage.presentation === 'introduction') continue
+    const subtest = (stage.section ?? '').toString().toLowerCase()
+
+    const pushQuestion = (q: any) => {
+      if (!q?.id) return
+      const raw = answers?.[q.id]
+      rows.push({
+        orderIndex: q.order_index ?? 0,
+        subtest,
+        questionText: questionPrompt(q),
+        studentDisplay: displayAnswer(q, raw),
+        correctDisplay: q.correct_answer != null ? displayAnswer(q, q.correct_answer) : '—',
+        isCorrect: answersMatch(q, raw),
+      })
+    }
+
+    for (const q of stage.questions ?? []) pushQuestion(q)
+    for (const extract of stage.extracts ?? []) {
+      for (const q of extract.questions ?? []) pushQuestion(q)
+    }
+  }
+
+  return rows
+}
+
+function openAnswerComparison(session: SessionSummary) {
+  const win = window.open('', '_blank')
+  if (!win) return
+
+  const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  const rows =
+    session.manifest && session.answers ? collectComparisonRows(session.manifest, session.answers) : []
+
+  const bySubtest = new Map<string, ComparisonRow[]>()
+  for (const r of rows) {
+    const key = r.subtest || 'other'
+    if (!bySubtest.has(key)) bySubtest.set(key, [])
+    bySubtest.get(key)!.push(r)
+  }
+
+  const sectionOrder = ['listening', 'reading', 'other']
+  const sectionLabel: Record<string, string> = { listening: 'Listening', reading: 'Reading', other: 'Other' }
+
+  const sectionsHtml = sectionOrder
+    .filter((key) => bySubtest.has(key))
+    .map((key) => {
+      const sectionRows = bySubtest.get(key)!
+      const correctCount = sectionRows.filter((r) => r.isCorrect === true).length
+      const scorableCount = sectionRows.filter((r) => r.isCorrect !== null).length
+      return `
+        <h2>${sectionLabel[key]} <span class="section-score">${correctCount} / ${scorableCount} correct</span></h2>
+        <table class="answers-table">
+          <thead>
+            <tr><th>Q</th><th>Question</th><th>Student's answer</th><th>Correct answer</th><th></th></tr>
+          </thead>
+          <tbody>
+            ${sectionRows
+              .map(
+                (r) => `
+              <tr class="${r.isCorrect === false ? 'wrong' : r.isCorrect === true ? 'right' : ''}">
+                <td>${r.orderIndex}</td>
+                <td>${escape(r.questionText)}</td>
+                <td>${escape(r.studentDisplay)}</td>
+                <td>${escape(r.correctDisplay)}</td>
+                <td class="mark">${r.isCorrect === true ? '✓' : r.isCorrect === false ? '✗' : ''}</td>
+              </tr>
+            `
+              )
+              .join('')}
+          </tbody>
+        </table>
+      `
+    })
+    .join('')
+
+  const writingHtml =
+    session.writingPrompt || session.essayText
+      ? `
+      <h2>Writing</h2>
+      ${session.writingPrompt ? `<div class="prompt">${escape(session.writingPrompt)}</div>` : ''}
+      <div class="essay">${session.essayText ? escape(session.essayText) : '<em>No response recorded.</em>'}</div>
+    `
+      : ''
+
+  win.document.write(`
+    <html>
+      <head>
+        <title>${session.studentName} — Answer comparison</title>
+        <style>
+          body { font-family: 'Work Sans', Arial, sans-serif; padding: 40px; color: #122033; max-width: 920px; margin: 0 auto; }
+          h1 { font-size: 22px; margin-bottom: 4px; }
+          h2 { font-size: 17px; margin-top: 32px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: baseline; }
+          .section-score { font-size: 13px; color: #64748B; font-weight: 400; }
+          p.meta { color: #64748B; margin-top: 0; }
+          table.answers-table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+          table.answers-table th, table.answers-table td { border: 1px solid #E2E8F0; padding: 6px 8px; text-align: left; vertical-align: top; }
+          table.answers-table th { background: #F4F8FF; }
+          tr.right td.mark { color: #1E8E5A; font-weight: 700; }
+          tr.wrong td.mark { color: #C0392B; font-weight: 700; }
+          tr.wrong td:nth-child(3) { color: #C0392B; }
+          .prompt { background: #F4F8FF; border-radius: 8px; padding: 16px 20px; margin: 12px 0; font-size: 13px; color: #334155; white-space: pre-wrap; }
+          .essay { white-space: pre-wrap; line-height: 1.6; font-size: 14px; }
+          .no-data { color: #64748B; }
+          @media print { table { break-inside: avoid; } }
+        </style>
+      </head>
+      <body>
+        <h1>${session.studentName}</h1>
+        <p class="meta">${session.testTitle} &middot; ${new Date(session.latestSubmittedAt).toLocaleString()}</p>
+        ${rows.length === 0 ? '<p class="no-data"><em>No manifest/answers available for this attempt.</em></p>' : sectionsHtml}
+        ${writingHtml}
+      </body>
+    </html>
+  `)
+  win.document.close()
+  win.focus()
+  win.print()
 }
 
 interface EditValues {
@@ -230,6 +390,8 @@ function TutorDashboard() {
         writing: null,
         writingPrompt: writingQuestion?.prompt ?? null,
         essayText: writingQuestion ? attempt.answers?.[writingQuestion.id] ?? null : null,
+        manifest: attempt.tests?.manifest ?? null,
+        answers: attempt.answers ?? null,
       }
 
       if (attempt.submitted_at > existing.latestSubmittedAt) {
@@ -615,6 +777,9 @@ function TutorDashboard() {
                                 <>
                                   <button className="btn-secondary" onClick={() => startEdit(s)}>
                                     Edit
+                                  </button>
+                                  <button className="btn-secondary" onClick={() => openAnswerComparison(s)}>
+                                    View / download answers
                                   </button>
                                   <button className="btn-secondary" onClick={() => openPrintableResult(s)}>
                                     Print / download
