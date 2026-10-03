@@ -21,6 +21,7 @@ interface SubtestResult {
 
 interface SessionSummary {
   sessionGroupId: string
+  attemptId: string | null
   studentName: string
   testTitle: string
   latestSubmittedAt: string
@@ -29,8 +30,18 @@ interface SessionSummary {
   writing: SubtestResult | null
   writingPrompt: string | null
   essayText: string | null
+  writingFeedback: WritingFeedback | null
   manifest: any
   answers: Record<string, string> | null
+}
+
+interface WritingFeedback {
+  criteria: { key: string; name: string; max: number; score: number; rationale: string }[]
+  overall_feedback: string
+  concerns: string[]
+  case_notes_available: boolean
+  model: string
+  graded_at: string
 }
 
 interface ComparisonRow {
@@ -246,6 +257,60 @@ function openWritingAnswer(session: SessionSummary) {
   win.focus()
   win.print()
 }
+
+function openWritingFeedback(session: SessionSummary) {
+  const fb = session.writingFeedback
+  if (!fb) return
+  const win = window.open('', '_blank')
+  if (!win) return
+
+  const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  win.document.write(`
+    <html>
+      <head>
+        <title>${session.studentName} — AI writing feedback</title>
+        <style>
+          body { font-family: 'Work Sans', Arial, sans-serif; padding: 40px; color: #122033; max-width: 720px; margin: 0 auto; }
+          h1 { font-size: 22px; margin-bottom: 4px; }
+          p.meta { color: #64748B; margin-top: 0; }
+          table { border-collapse: collapse; width: 100%; margin-top: 16px; font-size: 13px; }
+          th, td { border: 1px solid #E2E8F0; padding: 8px 10px; text-align: left; vertical-align: top; }
+          th { background: #F4F8FF; }
+          .overall { background: #F4F8FF; border-radius: 8px; padding: 16px 20px; margin: 20px 0; font-size: 14px; white-space: pre-wrap; }
+          .concerns { color: #B45309; font-size: 13px; }
+          .concerns li { margin-bottom: 4px; }
+          .footnote { color: #94A3B8; font-size: 11px; margin-top: 24px; }
+        </style>
+      </head>
+      <body>
+        <h1>${session.studentName}</h1>
+        <p class="meta">${session.testTitle} &middot; AI writing assessment &middot; ${new Date(fb.graded_at).toLocaleString()}</p>
+        <table>
+          <thead><tr><th>Criterion</th><th>Score</th><th>Rationale</th></tr></thead>
+          <tbody>
+            ${fb.criteria
+              .map(
+                (c) => `<tr><td>${escape(c.name)}</td><td>${c.score} / ${c.max}</td><td>${escape(c.rationale)}</td></tr>`
+              )
+              .join('')}
+          </tbody>
+        </table>
+        <div class="overall"><strong>Overall feedback:</strong><br />${escape(fb.overall_feedback)}</div>
+        ${
+          fb.concerns.length
+            ? `<div class="concerns"><strong>Flags:</strong><ul>${fb.concerns.map((c) => `<li>${escape(c)}</li>`).join('')}</ul></div>`
+            : ''
+        }
+        <p class="footnote">Graded by ${escape(fb.model)}${fb.case_notes_available ? '' : ' — case notes PDF was unavailable for this grading pass, so content was assessed from the task instruction and letter alone.'}</p>
+      </body>
+    </html>
+  `)
+  win.document.close()
+  win.focus()
+  win.print()
+}
+
 function openPrintableResult(session: SessionSummary) {
   const win = window.open('', '_blank')
   if (!win) return
@@ -308,6 +373,9 @@ function TutorDashboard() {
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [loadingResults, setLoadingResults] = useState(false)
 
+  const [gradingSessionId, setGradingSessionId] = useState<string | null>(null)
+  const [gradeErrors, setGradeErrors] = useState<Record<string, string>>({})
+
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [editValues, setEditValues] = useState<EditValues | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
@@ -353,7 +421,9 @@ function TutorDashboard() {
         subtest_type,
         raw_score,
         scorable_count,
+        feedback,
         attempts (
+          id,
           student_name,
           session_group_id,
           submitted_at,
@@ -382,6 +452,7 @@ function TutorDashboard() {
       const writingQuestion = findWritingQuestion(attempt.tests?.manifest)
       const existing = bySession.get(key) ?? {
         sessionGroupId: key,
+        attemptId: attempt.id ?? null,
         studentName: attempt.student_name ?? 'Unknown',
         testTitle: attempt.tests?.title ?? 'Unknown test',
         latestSubmittedAt: attempt.submitted_at,
@@ -390,6 +461,7 @@ function TutorDashboard() {
         writing: null,
         writingPrompt: writingQuestion?.prompt ?? null,
         essayText: writingQuestion ? attempt.answers?.[writingQuestion.id] ?? null : null,
+        writingFeedback: null,
         manifest: attempt.tests?.manifest ?? null,
         answers: attempt.answers ?? null,
       }
@@ -401,7 +473,11 @@ function TutorDashboard() {
       const result: SubtestResult = { resultId: row.id, raw: row.raw_score, scorable: row.scorable_count }
       if (row.subtest_type === 'listening') existing.listening = result
       else if (row.subtest_type === 'reading') existing.reading = result
-      else if (row.subtest_type === 'writing') existing.writing = result
+      else if (row.subtest_type === 'writing') {
+        existing.writing = result
+        existing.writingFeedback = row.feedback ?? null
+      }
+
 
       bySession.set(key, existing)
     }
@@ -534,6 +610,31 @@ function TutorDashboard() {
 
     cancelEdit()
     loadResults()
+  }
+
+  async function handleGradeWithAI(s: SessionSummary) {
+    if (!s.attemptId) {
+      setGradeErrors({ ...gradeErrors, [s.sessionGroupId]: 'No attempt id found for this session.' })
+      return
+    }
+    setGradingSessionId(s.sessionGroupId)
+    setGradeErrors({ ...gradeErrors, [s.sessionGroupId]: '' })
+
+    const { data, error } = await supabase.functions.invoke('grade-writing', {
+      body: { attemptId: s.attemptId },
+    })
+
+    setGradingSessionId(null)
+
+    if (error || (data as any)?.error) {
+      setGradeErrors({
+        ...gradeErrors,
+        [s.sessionGroupId]: (data as any)?.error ?? error?.message ?? 'AI grading failed.',
+      })
+      return
+    }
+
+    await loadResults()
   }
 
   if (checkingSession) {
@@ -756,7 +857,26 @@ function TutorDashboard() {
                                   <button className="btn-secondary" onClick={() => openWritingAnswer(s)}>
                                     View / download answer
                                   </button>
+                                  <button
+                                    className="btn-secondary"
+                                    onClick={() => handleGradeWithAI(s)}
+                                    disabled={gradingSessionId === s.sessionGroupId}
+                                  >
+                                    {gradingSessionId === s.sessionGroupId
+                                      ? 'Grading…'
+                                      : s.writingFeedback
+                                        ? 'Re-grade with AI'
+                                        : 'Grade with AI'}
+                                  </button>
+                                  {s.writingFeedback && (
+                                    <button className="btn-secondary" onClick={() => openWritingFeedback(s)}>
+                                      View AI feedback
+                                    </button>
+                                  )}
                                   <span className="tutor-writing-grade">{formatWriting(s.writing.raw)}</span>
+                                  {gradeErrors[s.sessionGroupId] && (
+                                    <span className="tutor-error">{gradeErrors[s.sessionGroupId]}</span>
+                                  )}
                                 </span>
                               ) : (
                                 '—'
