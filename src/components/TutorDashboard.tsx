@@ -350,6 +350,7 @@ function openPrintableResult(session: SessionSummary) {
 
 function TutorDashboard() {
   const [session, setSession] = useState<any>(null)
+  const [isTutor, setIsTutor] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
 
   const [email, setEmail] = useState('')
@@ -382,13 +383,25 @@ function TutorDashboard() {
   const [editError, setEditError] = useState('')
 
   useEffect(() => {
+    async function checkRole(userId: string) {
+      const { data } = await supabase.from('profiles').select('role').eq('id', userId).single()
+      setIsTutor(data?.role === 'tutor' || data?.role === 'admin')
+      setCheckingSession(false)
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
-      setCheckingSession(false)
+      if (data.session) checkRole(data.session.user.id)
+      else setCheckingSession(false)
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession)
+      if (newSession) checkRole(newSession.user.id)
+      else {
+        setIsTutor(false)
+        setCheckingSession(false)
+      }
     })
 
     return () => listener.subscription.unsubscribe()
@@ -675,6 +688,24 @@ function TutorDashboard() {
               </button>
             </form>
             {loginError && <p className="tutor-error">{loginError}</p>}
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  if (!isTutor) {
+    return (
+      <>
+        <SiteNav />
+        <div className="tutor-dashboard-page">
+          <div className="tutor-login-card card">
+            <span className="eyebrow">Tutor access</span>
+            <h1>This isn't a tutor account</h1>
+            <p>Sign in with your tutor account to reach this page.</p>
+            <button className="btn-secondary" onClick={handleSignOut}>
+              Sign out
+            </button>
           </div>
         </div>
       </>

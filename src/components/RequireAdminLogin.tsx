@@ -2,13 +2,19 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import SiteNav from './SiteNav'
 
-interface RequireTutorLoginProps {
+interface RequireAdminLoginProps {
   children: React.ReactNode
 }
 
-function RequireTutorLogin({ children }: RequireTutorLoginProps) {
+/**
+ * Gate for the admin panel (financials + user management). Deliberately
+ * stricter than RequireTutorLogin: a tutor account does NOT pass here,
+ * only role = 'admin'. Modeled closely on RequireTutorLogin so the two
+ * gates behave identically from the outside.
+ */
+function RequireAdminLogin({ children }: RequireAdminLoginProps) {
   const [session, setSession] = useState<any>(null)
-  const [isTutor, setIsTutor] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -17,7 +23,7 @@ function RequireTutorLogin({ children }: RequireTutorLoginProps) {
   useEffect(() => {
     async function checkRole(userId: string) {
       const { data } = await supabase.from('profiles').select('role').eq('id', userId).single()
-      setIsTutor(data?.role === 'tutor' || data?.role === 'admin')
+      setIsAdmin(data?.role === 'admin')
       setCheckingSession(false)
     }
 
@@ -31,7 +37,7 @@ function RequireTutorLogin({ children }: RequireTutorLoginProps) {
       setSession(newSession)
       if (newSession) checkRole(newSession.user.id)
       else {
-        setIsTutor(false)
+        setIsAdmin(false)
         setCheckingSession(false)
       }
     })
@@ -67,8 +73,8 @@ function RequireTutorLogin({ children }: RequireTutorLoginProps) {
         <SiteNav />
         <div className="tutor-dashboard-page">
           <div className="tutor-login-card card">
-            <span className="eyebrow">Admin access</span>
-            <h1>Tutor login</h1>
+            <span className="eyebrow">Admin panel</span>
+            <h1>Admin login</h1>
             <form onSubmit={handleLogin} className="tutor-login-form">
               <label>
                 Email
@@ -94,15 +100,15 @@ function RequireTutorLogin({ children }: RequireTutorLoginProps) {
     )
   }
 
-  if (!isTutor) {
+  if (!isAdmin) {
     return (
       <>
         <SiteNav />
         <div className="tutor-dashboard-page">
           <div className="tutor-login-card card">
-            <span className="eyebrow">Admin access</span>
-            <h1>This isn't a tutor account</h1>
-            <p>Sign in with your tutor account to reach this page.</p>
+            <span className="eyebrow">Admin panel</span>
+            <h1>This account isn't an admin</h1>
+            <p>Sign in with an admin account to reach this page.</p>
             <button className="btn-secondary" onClick={handleSignOut}>
               Sign out
             </button>
@@ -115,7 +121,7 @@ function RequireTutorLogin({ children }: RequireTutorLoginProps) {
   return (
     <>
       <SiteNav />
-      <div className="tutor-dashboard-header" style={{ maxWidth: 820, margin: '0 auto', padding: '24px 24px 0' }}>
+      <div className="tutor-dashboard-header" style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 24px 0' }}>
         <div />
         <button className="btn-secondary" onClick={handleSignOut}>
           Sign out
@@ -126,4 +132,4 @@ function RequireTutorLogin({ children }: RequireTutorLoginProps) {
   )
 }
 
-export default RequireTutorLogin
+export default RequireAdminLogin

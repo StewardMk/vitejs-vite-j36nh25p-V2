@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
 
 function Icon({
   name,
@@ -469,7 +471,30 @@ function ExamPreview() {
    HOMEPAGE
    ========================================================= */
 
+interface CatalogTeaserTest {
+  id: string
+  title: string
+  profession: string | null
+  price_kwacha: number
+}
+
+function formatKwacha(price: number) {
+  if (price === 0) return 'Free'
+  return `K${price.toLocaleString()}`
+}
+
 function Homepage() {
+  const [teaserTests, setTeaserTests] = useState<CatalogTeaserTest[] | null>(null)
+
+  useEffect(() => {
+    supabase
+      .from('exam_catalog')
+      .select('id, title, profession, price_kwacha')
+      .order('created_at', { ascending: false })
+      .limit(3)
+      .then(({ data }) => setTeaserTests((data as CatalogTeaserTest[]) ?? []))
+  }, [])
+
   return (
     <div>
       {/* =====================================================
@@ -513,12 +538,12 @@ function Homepage() {
 
           <a href="#how-it-works">How it works</a>
 
-          <Link to="/tutor">
-            <button className="btn-secondary">Tutor login</button>
+          <Link to="/login">
+            <button className="btn-secondary">Log in</button>
           </Link>
 
-          <Link to="/admin">
-            <button className="btn-primary" style={{ padding: '10px 18px' }}>Admin upload</button>
+          <Link to="/exams">
+            <button className="btn-primary" style={{ padding: '10px 18px' }}>Browse exams</button>
           </Link>
         </div>
       </nav>
@@ -549,7 +574,7 @@ function Homepage() {
 
           <div className="hero-cta-row">
             <Link
-              to="/exam"
+              to="/exams"
               style={{
                 textDecoration: 'none',
               }}
@@ -920,12 +945,12 @@ function Homepage() {
           </span>
 
           <h2>
-            From enrolment to exam day
+            From sign-up to results
           </h2>
 
           <p>
-            A simple practice journey that keeps the focus
-            on preparation.
+            Create an account, choose your exam, and start practising --
+            no class or waiting on anyone else required.
           </p>
         </div>
 
@@ -936,12 +961,12 @@ function Homepage() {
             </span>
 
             <h3>
-              Enrol in a course
+              Create your account
             </h3>
 
             <p>
-              Join a tutor-led class covering the skills
-              required across the OET sub-tests.
+              Sign up with your email in under a minute --
+              no tutor or class needed to get started.
             </p>
           </div>
 
@@ -951,12 +976,12 @@ function Homepage() {
             </span>
 
             <h3>
-              Attend your lesson
+              Choose &amp; buy your exam
             </h3>
 
             <p>
-              Your tutor gives you an access code at the
-              start of your practice session.
+              Browse the catalog and pay for the practice
+              exam you want -- access opens immediately.
             </p>
           </div>
 
@@ -990,6 +1015,14 @@ function Homepage() {
             </p>
           </div>
         </div>
+
+        <p style={{ marginTop: 28, fontSize: 13, color: 'var(--color-ink-muted)' }}>
+          Working with a tutor instead?{' '}
+          <Link to="/exam" style={{ color: 'var(--color-primary)' }}>
+            Enter the access code they gave you
+          </Link>
+          .
+        </p>
       </section>
 
 
@@ -1046,7 +1079,7 @@ function Homepage() {
             </p>
 
             <Link
-              to="/exam"
+              to="/exams"
               style={{
                 textDecoration: 'none',
               }}
@@ -1147,6 +1180,59 @@ function Homepage() {
 
 
       {/* =====================================================
+          PRICING TEASER
+          ===================================================== */}
+
+      {teaserTests && teaserTests.length > 0 && (
+        <section className="section" id="pricing">
+          <div className="section-heading">
+            <span className="folder-tab">
+              Available now
+            </span>
+
+            <h2>
+              Pick a practice exam
+            </h2>
+
+            <p>
+              A sample of what's in the catalog -- see every available
+              exam and its price once you're signed in.
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: 18,
+              maxWidth: 'var(--container-width)',
+              margin: '0 auto',
+            }}
+          >
+            {teaserTests.map((test) => (
+              <div key={test.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <span className="folder-tab">{test.profession ?? 'OET'}</span>
+                <h3 style={{ margin: 0, fontSize: 16 }}>{test.title}</h3>
+                <strong style={{ marginTop: 'auto', fontSize: 18 }}>{formatKwacha(test.price_kwacha)}</strong>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ textAlign: 'center', marginTop: 24 }}>
+            <Link to="/exams" style={{ textDecoration: 'none' }}>
+              <button className="btn-primary">
+                See the full catalog
+                <span style={{ marginLeft: 8 }}>
+                  <Icon name="arrow" size={16} />
+                </span>
+              </button>
+            </Link>
+          </div>
+        </section>
+      )}
+
+
+      {/* =====================================================
           CTA
           ===================================================== */}
 
@@ -1156,31 +1242,40 @@ function Homepage() {
         </h2>
 
         <p>
-          Enter the access code provided by your tutor
-          and begin your computer-based practice test.
+          Create a free account and start practising for OET today.
         </p>
 
-        <Link
-          to="/exam"
-          style={{
-            textDecoration: 'none',
-          }}
-        >
-          <button
-            className="btn-secondary"
+        <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Link
+            to="/login"
             style={{
-              background: '#FFFFFF',
-              borderColor: '#FFFFFF',
-              color: 'var(--color-primary-dark)',
-              boxShadow: '0 8px 20px rgba(0,0,0,0.10)',
+              textDecoration: 'none',
             }}
           >
-            Enter your access code
-            <span style={{ marginLeft: 8 }}>
-              <Icon name="arrow" size={16} />
-            </span>
-          </button>
-        </Link>
+            <button
+              className="btn-secondary"
+              style={{
+                background: '#FFFFFF',
+                borderColor: '#FFFFFF',
+                color: 'var(--color-primary-dark)',
+                boxShadow: '0 8px 20px rgba(0,0,0,0.10)',
+              }}
+            >
+              Create your account
+              <span style={{ marginLeft: 8 }}>
+                <Icon name="arrow" size={16} />
+              </span>
+            </button>
+          </Link>
+        </div>
+
+        <p style={{ marginTop: 18, fontSize: 13, opacity: 0.85 }}>
+          Have an access code from your tutor instead?{' '}
+          <Link to="/exam" style={{ color: '#FFFFFF', textDecoration: 'underline' }}>
+            Enter it here
+          </Link>
+          .
+        </p>
       </section>
 
 
@@ -1241,6 +1336,13 @@ function Homepage() {
               style={{ textDecoration: 'none' }}
             >
               Admin upload
+            </Link>
+
+            <Link
+              to="/admin-panel"
+              style={{ textDecoration: 'none' }}
+            >
+              Admin panel
             </Link>
           </div>
         </div>
