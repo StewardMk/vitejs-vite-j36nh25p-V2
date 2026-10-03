@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import SiteNav from './SiteNav'
 
 interface RequireTutorLoginProps {
   children: React.ReactNode
@@ -49,55 +50,79 @@ function RequireTutorLogin({ children }: RequireTutorLoginProps) {
     await supabase.auth.signOut()
   }
 
-  if (checkingSession) return <p>Loading...</p>
+  if (checkingSession) {
+    return (
+      <>
+        <SiteNav />
+        <div className="tutor-dashboard-page">
+          <p>Loading…</p>
+        </div>
+      </>
+    )
+  }
 
   if (!session) {
     return (
-      <div style={{ maxWidth: 400, margin: '40px auto', padding: 24 }}>
-        <h2>Tutor Login</h2>
-        <form onSubmit={handleLogin}>
-          <div>
-            <label>Email</label>
-            <br />
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <>
+        <SiteNav />
+        <div className="tutor-dashboard-page">
+          <div className="tutor-login-card card">
+            <span className="eyebrow">Admin access</span>
+            <h1>Tutor login</h1>
+            <form onSubmit={handleLogin} className="tutor-login-form">
+              <label>
+                Email
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+              </label>
+              <label>
+                Password
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                />
+              </label>
+              <button type="submit" className="btn-primary">
+                Log in
+              </button>
+            </form>
+            {loginError && <p className="tutor-error">{loginError}</p>}
           </div>
-          <div style={{ marginTop: 12 }}>
-            <label>Password</label>
-            <br />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          <button type="submit" style={{ marginTop: 16 }}>
-            Log in
-          </button>
-        </form>
-        {loginError && <p style={{ color: 'crimson' }}>{loginError}</p>}
-      </div>
+        </div>
+      </>
     )
   }
 
   if (!isTutor) {
     return (
-      <div style={{ maxWidth: 400, margin: '40px auto', padding: 24, textAlign: 'center' }}>
-        <h2>Tutor access only</h2>
-        <p style={{ color: 'crimson' }}>
-          This account isn't set up as a tutor account, so it can't access this page.
-        </p>
-        <button onClick={handleSignOut}>Sign out</button>
-      </div>
+      <>
+        <SiteNav />
+        <div className="tutor-dashboard-page">
+          <div className="tutor-login-card card">
+            <span className="eyebrow">Admin access</span>
+            <h1>This isn't a tutor account</h1>
+            <p>Sign in with your tutor account to reach this page.</p>
+            <button className="btn-secondary" onClick={handleSignOut}>
+              Sign out
+            </button>
+          </div>
+        </div>
+      </>
     )
   }
 
   return (
-    <div>
-      <div style={{ textAlign: 'right', padding: '8px 24px' }}>
-        <button onClick={handleSignOut}>Sign out</button>
+    <>
+      <SiteNav />
+      <div className="tutor-dashboard-header" style={{ maxWidth: 820, margin: '0 auto', padding: '24px 24px 0' }}>
+        <div />
+        <button className="btn-secondary" onClick={handleSignOut}>
+          Sign out
+        </button>
       </div>
       {children}
-    </div>
+    </>
   )
 }
 

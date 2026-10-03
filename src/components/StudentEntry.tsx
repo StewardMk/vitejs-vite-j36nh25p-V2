@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import SiteNav from './SiteNav'
 
 interface StudentEntryProps {
   onSuccess: (testData: any, studentName: string) => void
@@ -110,7 +111,9 @@ function StudentEntry({ onSuccess }: StudentEntryProps) {
   }
 
   return (
-    <div className="student-entry-page">
+    <>
+      <SiteNav />
+      <div className="student-entry-page">
       <div className="student-entry-layout">
 
         {/* =================================================
@@ -298,7 +301,8 @@ function StudentEntry({ onSuccess }: StudentEntryProps) {
 
         </div>
       </div>
-    </div>
+      </div>
+    </>
   )
 }
 

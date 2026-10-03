@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { signUpStudent, signInStudent } from '../lib/studentAuth'
+import SiteNav from './SiteNav'
 
 function extractErrorMessage(error: any) {
   return error?.message || 'Something went wrong. Please try again.'
@@ -67,25 +68,30 @@ function StudentAuthPage() {
 
   if (checkEmail) {
     return (
-      <div className="student-entry-page">
-        <div className="student-entry-layout">
-          <div className="student-entry-card" style={{ margin: '0 auto' }}>
-            <h2>Check your email</h2>
-            <p className="student-entry-card-subtitle">
-              We sent a confirmation link to <strong>{email}</strong>. Click it, then come back
-              here and log in.
-            </p>
-            <button className="btn-primary student-entry-submit" onClick={() => setMode('login')}>
-              Go to log in
-            </button>
+      <>
+        <SiteNav />
+        <div className="student-entry-page">
+          <div className="student-entry-layout">
+            <div className="student-entry-card" style={{ margin: '0 auto' }}>
+              <h2>Check your email</h2>
+              <p className="student-entry-card-subtitle">
+                We sent a confirmation link to <strong>{email}</strong>. Click it, then come back
+                here and log in.
+              </p>
+              <button className="btn-primary student-entry-submit" onClick={() => setMode('login')}>
+                Go to log in
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </>
     )
   }
 
   return (
-    <div className="student-entry-page">
+    <>
+      <SiteNav />
+      <div className="student-entry-page">
       <div className="student-entry-layout">
         <div className="student-entry-intro">
           <span className="eyebrow">OET Training Centre</span>
@@ -187,7 +193,8 @@ function StudentAuthPage() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   )
 }
 
