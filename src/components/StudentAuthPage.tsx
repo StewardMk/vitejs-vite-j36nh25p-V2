@@ -13,7 +13,10 @@ function extractErrorMessage(error: any) {
  * feel like different products.
  */
 function StudentAuthPage() {
-  const [mode, setMode] = useState<'login' | 'signup'>('signup')
+  const [searchParams] = useSearchParams()
+  const [mode, setMode] = useState<'login' | 'signup'>(
+    searchParams.get('mode') === 'login' ? 'login' : 'signup',
+  )
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -22,7 +25,6 @@ function StudentAuthPage() {
   const [checkEmail, setCheckEmail] = useState(false)
 
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
   const next = searchParams.get('next') || '/exams'
 
   async function handleSubmit(e: React.FormEvent) {
