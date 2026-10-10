@@ -538,12 +538,14 @@ function Homepage() {
 
           <a href="#how-it-works">How it works</a>
 
-          <Link to="/login">
+          <Link to="/exam">Have a code?</Link>
+
+          <Link to="/login?mode=login">
             <button className="btn-secondary">Log in</button>
           </Link>
 
-          <Link to="/exams">
-            <button className="btn-primary" style={{ padding: '10px 18px' }}>Browse exams</button>
+          <Link to="/login">
+            <button className="btn-primary" style={{ padding: '10px 18px' }}>Sign up</button>
           </Link>
         </div>
       </nav>
@@ -574,30 +576,37 @@ function Homepage() {
 
           <div className="hero-cta-row">
             <Link
-              to="/exams"
+              to="/login"
               style={{
                 textDecoration: 'none',
               }}
             >
               <button className="btn-primary">
-                Start a practice test
+                Sign up free
                 <span style={{ marginLeft: 8 }}>
                   <Icon name="arrow" size={17} />
                 </span>
               </button>
             </Link>
 
-            <a
-              href="#how-it-works"
+            <Link
+              to="/login?mode=login"
               style={{
                 textDecoration: 'none',
               }}
             >
               <button className="btn-secondary">
-                How it works
+                Log in
               </button>
-            </a>
+            </Link>
           </div>
+
+          <p style={{ marginTop: 18, fontSize: 14, color: 'var(--color-ink-muted)' }}>
+            Have an access code from your tutor?{' '}
+            <Link to="/exam" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
+              Start a practice test
+            </Link>
+          </p>
 
           {/* Small reassurance row */}
           <div
@@ -1019,7 +1028,7 @@ function Homepage() {
         <p style={{ marginTop: 28, fontSize: 13, color: 'var(--color-ink-muted)' }}>
           Working with a tutor instead?{' '}
           <Link to="/exam" style={{ color: 'var(--color-primary)' }}>
-            Enter the access code they gave you
+            Start a practice test with the access code they gave you
           </Link>
           .
         </p>
@@ -1085,7 +1094,7 @@ function Homepage() {
               }}
             >
               <button className="btn-primary">
-                Start practising
+                Browse exams
                 <span style={{ marginLeft: 8 }}>
                   <Icon name="arrow" size={16} />
                 </span>
@@ -1272,7 +1281,7 @@ function Homepage() {
         <p style={{ marginTop: 18, fontSize: 13, opacity: 0.85 }}>
           Have an access code from your tutor instead?{' '}
           <Link to="/exam" style={{ color: '#FFFFFF', textDecoration: 'underline' }}>
-            Enter it here
+            Start a practice test
           </Link>
           .
         </p>
