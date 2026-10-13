@@ -47,3 +47,96 @@ export function clearExamSession() {
     // ignore
   }
 }
+
+// ============================================================
+// Saved exam progress (localStorage) -- shared with ManifestExamRunner.
+//
+// The runner mirrors page position, answers and section-timer start times
+// here so an exam survives a reload or crash. The key is per test + student
+// name, so starting the same test again under the same name used to find the
+// old attempt and silently restore it. ExamFlow now asks first (see
+// findUnfinishedAttempt below) and calls clearSavedProgress if the student
+// chooses to start over.
+// ============================================================
+export function progressStorageKey(testId: string, studentName: string) {
+  return `oet-manifest-progress:${testId}:${studentName}`
+}
+
+export function clearSavedProgress(testId: string, studentName: string) {
+  try {
+    window.localStorage.removeItem(progressStorageKey(testId, studentName))
+  } catch {
+    // ignore
+  }
+}
+
+export type UnfinishedAttempt = {
+  /** When progress was last written (ms since epoch); null for progress saved before this was recorded. */
+  savedAt: number | null
+}
+
+/**
+ * Returns details of an unfinished attempt for this test + student, or null.
+ * Progress only counts if there is something to lose: the student has moved
+ * past the first page or typed/selected at least one answer. A bare "opened
+ * the intro page and left" is not worth interrupting anyone for.
+ */
+export function findUnfinishedAttempt(testId: string, studentName: string): UnfinishedAttempt | null {
+  try {
+    const raw = window.localStorage.getItem(progressStorageKey(testId, studentName))
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return null
+
+    const pastFirstPage = typeof parsed.pageIndex === 'number' && parsed.pageIndex > 0
+    const answers = parsed.answers && typeof parsed.answers === 'object' ? parsed.answers : {}
+    const hasAnswer = Object.values(answers).some((v) => typeof v === 'string' && v.trim() !== '')
+    if (!pastFirstPage && !hasAnswer) return null
+
+    return { savedAt: typeof parsed.savedAt === 'number' ? parsed.savedAt : null }
+  } catch {
+    return null
+  }
+}
+
+// ============================================================
+// Reload intent.
+//
+// The exam's own "Reload Exam" button tells the student their progress will
+// be restored exactly where they are, so that one reload must resume without
+// asking. Any other way of arriving back at an unfinished attempt (a new
+// access code, starting from the catalog, a manual refresh, a returning
+// tab) gets the "continue previous test?" prompt instead. The button leaves
+// a short-lived marker in sessionStorage right before reloading; ExamFlow
+// reads it once on load. The timestamp keeps a stale marker from skipping
+// the prompt later.
+// ============================================================
+const RELOAD_INTENT_KEY = 'oet-exam-reload-intent'
+const RELOAD_INTENT_TTL_MS = 30_000
+
+export function markReloadIntent() {
+  try {
+    window.sessionStorage.setItem(RELOAD_INTENT_KEY, String(Date.now()))
+  } catch {
+    // ignore -- worst case the student sees the prompt after the reload
+  }
+}
+
+export function hasReloadIntent(): boolean {
+  try {
+    const raw = window.sessionStorage.getItem(RELOAD_INTENT_KEY)
+    if (!raw) return false
+    const at = Number(raw)
+    return Number.isFinite(at) && Date.now() - at >= 0 && Date.now() - at < RELOAD_INTENT_TTL_MS
+  } catch {
+    return false
+  }
+}
+
+export function clearReloadIntent() {
+  try {
+    window.sessionStorage.removeItem(RELOAD_INTENT_KEY)
+  } catch {
+    // ignore
+  }
+}

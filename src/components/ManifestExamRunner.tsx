@@ -4,7 +4,7 @@ import ExamChrome, { type ExamNavGroup } from './ExamChrome'
 import ConfirmModal from './ConfirmModal'
 import AudioPlayer, { type AudioPlayerHandle } from './AudioPlayer'
 import DraggablePdfWindow from './DraggablePdfWindow'
-import { clearExamSession } from '../lib/examSession'
+import { clearExamSession, clearSavedProgress, markReloadIntent, progressStorageKey } from '../lib/examSession'
 
 function formatTime(total: number) {
   const m = Math.floor(total / 60)
@@ -29,10 +29,6 @@ function fileUrl(testId: string, bucket: string, fileRef: string) {
 // ============================================================
 type SavedProgress = { pageIndex: number; answers: Record<string, string>; timerStarts: Record<string, number> }
 
-function progressStorageKey(testId: string, studentName: string) {
-  return `oet-manifest-progress:${testId}:${studentName}`
-}
-
 function loadSavedProgress(testId: string, studentName: string): SavedProgress | null {
   try {
     const raw = window.localStorage.getItem(progressStorageKey(testId, studentName))
@@ -51,18 +47,10 @@ function loadSavedProgress(testId: string, studentName: string): SavedProgress |
 
 function saveProgress(testId: string, studentName: string, progress: SavedProgress) {
   try {
-    window.localStorage.setItem(progressStorageKey(testId, studentName), JSON.stringify(progress))
+    window.localStorage.setItem(progressStorageKey(testId, studentName), JSON.stringify({ ...progress, savedAt: Date.now() }))
   } catch {
     // localStorage unavailable (private browsing, storage full, etc.) -- the
     // exam still runs fine, it just won't be resumable after a reload.
-  }
-}
-
-function clearSavedProgress(testId: string, studentName: string) {
-  try {
-    window.localStorage.removeItem(progressStorageKey(testId, studentName))
-  } catch {
-    // ignore
   }
 }
 
@@ -1013,7 +1001,11 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
         message="This reloads the page. Your answers and section timer are saved and will be restored to exactly where you are now — use this if the test seems stuck or audio won't play."
         confirmLabel="Reload"
         cancelLabel="Cancel"
-        onConfirm={() => window.location.reload()}
+        onConfirm={() => {
+          // Tell ExamFlow this reload is deliberate so it resumes without asking.
+          markReloadIntent()
+          window.location.reload()
+        }}
         onCancel={() => setReloadConfirmOpen(false)}
       />
     </>
