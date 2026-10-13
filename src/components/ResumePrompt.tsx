@@ -3,7 +3,9 @@ interface ResumePromptProps {
   /** When the unfinished attempt was last saved (ms since epoch), if known. */
   savedAt: number | null
   onContinue: () => void
-  onStartOver: () => void
+  /** Sentence under the message explaining what Start new test does. */
+  startNewHint: string
+  onStartNew: () => void
 }
 
 function timeAgo(savedAt: number): string {
@@ -19,10 +21,10 @@ function timeAgo(savedAt: number): string {
 /**
  * Shown when a student opens a test they have an unfinished attempt of.
  * Reuses the exam modal styling but deliberately has no click-outside
- * dismissal: "Start over" deletes saved answers, so it must never fire by
+ * dismissal: "Start new test" deletes saved answers, so it must never fire by
  * accident -- the student has to pick one of the two buttons.
  */
-function ResumePrompt({ testTitle, savedAt, onContinue, onStartOver }: ResumePromptProps) {
+function ResumePrompt({ testTitle, savedAt, onContinue, startNewHint, onStartNew }: ResumePromptProps) {
   return (
     <div className="modal-overlay" role="presentation">
       <div
@@ -44,10 +46,10 @@ function ResumePrompt({ testTitle, savedAt, onContinue, onStartOver }: ResumePro
             <p>
               You have an unfinished attempt of <strong>{testTitle}</strong>
               {savedAt ? ` (last saved ${timeAgo(savedAt)})` : ''}. Would you like to continue where you left off, or
-              start over from the beginning?
+              start a new test?
             </p>
             <p style={{ marginTop: 10, fontSize: 13, color: '#5a6472' }}>
-              Starting over deletes the answers saved from your previous attempt.
+              {startNewHint}
             </p>
           </div>
         </div>
@@ -56,8 +58,8 @@ function ResumePrompt({ testTitle, savedAt, onContinue, onStartOver }: ResumePro
           <button className="btn-primary" onClick={onContinue} autoFocus>
             Continue previous attempt
           </button>
-          <button className="btn-secondary" onClick={onStartOver}>
-            Start over
+          <button className="btn-secondary" onClick={onStartNew}>
+            Start new test
           </button>
         </div>
       </div>
