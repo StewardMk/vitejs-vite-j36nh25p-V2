@@ -56,7 +56,7 @@ export function clearExamSession() {
 // name, so starting the same test again under the same name used to find the
 // old attempt and silently restore it. ExamFlow now asks first (see
 // findUnfinishedAttempt below) and calls clearSavedProgress if the student
-// chooses to start over.
+// chooses to start a new test.
 // ============================================================
 export function progressStorageKey(testId: string, studentName: string) {
   return `oet-manifest-progress:${testId}:${studentName}`
