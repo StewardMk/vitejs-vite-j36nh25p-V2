@@ -3,6 +3,7 @@ import StudentEntry from './StudentEntry'
 import ManifestExamRunner from './ManifestExamRunner'
 import ResumePrompt from './ResumePrompt'
 import {
+  clearExamSession,
   clearReloadIntent,
   clearSavedProgress,
   findUnfinishedAttempt,
@@ -13,8 +14,11 @@ import {
 } from '../lib/examSession'
 
 // An exam the student is about to open, held back until they choose whether to
-// continue an earlier unfinished attempt of it or start over.
-type PendingResume = { session: ExamSession; savedAt: number | null }
+// continue an earlier unfinished attempt of it or start a new test.
+//  - 'tab':   the exam came from this tab's stored session (catalog start,
+//             refresh, returning to the page).
+//  - 'login': the student has just entered an access code for it.
+type PendingResume = { session: ExamSession; savedAt: number | null; origin: 'tab' | 'login' }
 
 function testTitleOf(test: any): string {
   return test?.title ?? test?.manifest?.exam?.title ?? 'this test'
@@ -36,7 +40,7 @@ function initialFlow(): { session: ExamSession | null; pending: PendingResume | 
   if (hasReloadIntent()) return { session: stored, pending: null }
 
   const unfinished = findUnfinishedAttempt(stored.test.id, stored.studentName)
-  if (unfinished) return { session: null, pending: { session: stored, savedAt: unfinished.savedAt } }
+  if (unfinished) return { session: null, pending: { session: stored, savedAt: unfinished.savedAt, origin: 'tab' } }
 
   return { session: stored, pending: null }
 }
@@ -64,10 +68,24 @@ function ExamFlow() {
     const next: ExamSession = { test: testData, studentName: name }
     const unfinished = findUnfinishedAttempt(testData.id, name)
     if (unfinished) {
-      setPending({ session: next, savedAt: unfinished.savedAt })
+      setPending({ session: next, savedAt: unfinished.savedAt, origin: 'login' })
       return
     }
     openExam(next)
+  }
+
+  // "Start new test": throw away the unfinished attempt. A tab/catalog session
+  // goes back to the access-code page for a fresh code. If the student has just
+  // entered a code, that code is already used up, so asking again would only
+  // waste it -- begin the test they just unlocked instead.
+  function startNewTest(current: PendingResume) {
+    clearSavedProgress(current.session.test.id, current.session.studentName)
+    if (current.origin === 'login') {
+      openExam(current.session)
+      return
+    }
+    clearExamSession()
+    setPending(null)
   }
 
   if (session) {
@@ -81,11 +99,12 @@ function ExamFlow() {
         savedAt={pending.savedAt}
         // Continue: the runner finds the saved progress and restores it.
         onContinue={() => openExam(pending.session)}
-        // Start over: discard the old progress first so the runner starts clean.
-        onStartOver={() => {
-          clearSavedProgress(pending.session.test.id, pending.session.studentName)
-          openExam(pending.session)
-        }}
+        startNewHint={
+          pending.origin === 'tab'
+            ? 'Starting a new test deletes the answers saved from your previous attempt and takes you to the access code page.'
+            : 'Starting a new test deletes the answers saved from your previous attempt.'
+        }
+        onStartNew={() => startNewTest(pending)}
       />
     )
   }
