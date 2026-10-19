@@ -62,8 +62,11 @@
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
+  /* Decorative/absolutely positioned bits must never create sideways scrolling. */
+  overflow-x: clip;
 }
 
 h1,

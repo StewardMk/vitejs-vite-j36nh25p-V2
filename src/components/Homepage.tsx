@@ -1,6 +1,4 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 
 function Icon({
   name,
@@ -471,30 +469,7 @@ function ExamPreview() {
    HOMEPAGE
    ========================================================= */
 
-interface CatalogTeaserTest {
-  id: string
-  title: string
-  profession: string | null
-  price_kwacha: number
-}
-
-function formatKwacha(price: number) {
-  if (price === 0) return 'Free'
-  return `K${price.toLocaleString()}`
-}
-
 function Homepage() {
-  const [teaserTests, setTeaserTests] = useState<CatalogTeaserTest[] | null>(null)
-
-  useEffect(() => {
-    supabase
-      .from('exam_catalog')
-      .select('id, title, profession, price_kwacha')
-      .order('created_at', { ascending: false })
-      .limit(3)
-      .then(({ data }) => setTeaserTests((data as CatalogTeaserTest[]) ?? []))
-  }, [])
-
   return (
     <div>
       {/* =====================================================
@@ -1186,59 +1161,6 @@ function Homepage() {
           </div>
         </div>
       </section>
-
-
-      {/* =====================================================
-          PRICING TEASER
-          ===================================================== */}
-
-      {teaserTests && teaserTests.length > 0 && (
-        <section className="section" id="pricing">
-          <div className="section-heading">
-            <span className="folder-tab">
-              Available now
-            </span>
-
-            <h2>
-              Pick a practice exam
-            </h2>
-
-            <p>
-              A sample of what's in the catalog -- see every available
-              exam and its price once you're signed in.
-            </p>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: 18,
-              maxWidth: 'var(--container-width)',
-              margin: '0 auto',
-            }}
-          >
-            {teaserTests.map((test) => (
-              <div key={test.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <span className="folder-tab">{test.profession ?? 'OET'}</span>
-                <h3 style={{ margin: 0, fontSize: 16 }}>{test.title}</h3>
-                <strong style={{ marginTop: 'auto', fontSize: 18 }}>{formatKwacha(test.price_kwacha)}</strong>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ textAlign: 'center', marginTop: 24 }}>
-            <Link to="/exams" style={{ textDecoration: 'none' }}>
-              <button className="btn-primary">
-                See the full catalog
-                <span style={{ marginLeft: 8 }}>
-                  <Icon name="arrow" size={16} />
-                </span>
-              </button>
-            </Link>
-          </div>
-        </section>
-      )}
 
 
       {/* =====================================================

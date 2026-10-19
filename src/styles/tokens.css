@@ -1124,10 +1124,14 @@
   @media (max-width: 700px) {
     .nav {
       padding: 16px 20px;
+      flex-wrap: wrap;
+      gap: 10px 16px;
     }
   
     .nav-links {
-      gap: 16px;
+      gap: 10px 16px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
   
     .hero {
@@ -2623,6 +2627,7 @@
   margin-bottom: 20px;
   gap: 16px;
 }
+.tutor-dashboard-header { flex-wrap: wrap; text-align: left; }
 .tutor-dashboard-header h1 { margin: 4px 0 0; }
 
 .tutor-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
