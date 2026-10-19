@@ -25,6 +25,17 @@ interface UserRow {
   is_approved?: boolean
 }
 
+interface TestRow {
+  id: string
+  title: string
+  profession: string | null
+  price_kwacha: number
+  is_published: boolean
+  created_at: string
+  attempt_count: number
+  purchase_count: number
+}
+
 interface UserDetail {
   user: UserRow
   purchases: { test_title: string; amount_kwacha: number; status: string; created_at: string; paid_at: string | null }[]
@@ -76,9 +87,14 @@ function StatTile({ label, value }: { label: string; value: string }) {
 }
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'overview' | 'transactions' | 'users'>('overview')
+  const [tab, setTab] = useState<'overview' | 'transactions' | 'users' | 'tests'>('overview')
   const [purchases, setPurchases] = useState<PurchaseRow[]>([])
   const [users, setUsers] = useState<UserRow[]>([])
+  const [testRows, setTestRows] = useState<TestRow[]>([])
+  const [testsError, setTestsError] = useState('')
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({})
+  const [busyTestId, setBusyTestId] = useState<string | null>(null)
+  const [testMessage, setTestMessage] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
 
@@ -92,7 +108,47 @@ function AdminPanel() {
     loadAll()
   }, [])
 
+  async function loadTests() {
+    setTestsError('')
+    const { data, error } = await supabase.rpc('admin_list_tests')
+    if (error) {
+      setTestsError(error.message)
+      return
+    }
+    setTestRows((data as TestRow[]) ?? [])
+    setPriceDrafts({})
+  }
+
+  async function saveTest(test: TestRow, next: { is_published?: boolean; price?: number }) {
+    setBusyTestId(test.id)
+    setTestMessage((prev) => ({ ...prev, [test.id]: '' }))
+    const { data, error } = await supabase.rpc('admin_update_test', {
+      p_test_id: test.id,
+      p_is_published: next.is_published ?? test.is_published,
+      p_price_kwacha: next.price ?? test.price_kwacha,
+    })
+    setBusyTestId(null)
+    if (error || data?.error) {
+      setTestMessage((prev) => ({ ...prev, [test.id]: error?.message ?? data?.error }))
+      return
+    }
+    setTestRows((prev) =>
+      prev.map((x) =>
+        x.id === test.id
+          ? { ...x, is_published: next.is_published ?? x.is_published, price_kwacha: next.price ?? x.price_kwacha }
+          : x,
+      ),
+    )
+    setPriceDrafts((prev) => {
+      const copy = { ...prev }
+      delete copy[test.id]
+      return copy
+    })
+    setTestMessage((prev) => ({ ...prev, [test.id]: 'Saved' }))
+  }
+
   async function loadAll() {
+    loadTests()
     setLoading(true)
     setLoadError('')
 
@@ -204,6 +260,9 @@ function AdminPanel() {
         <button className={`tutor-tab ${tab === 'transactions' ? 'active' : ''}`} onClick={() => setTab('transactions')}>
           Transactions
         </button>
+        <button className={`tutor-tab ${tab === 'tests' ? 'active' : ''}`} onClick={() => setTab('tests')}>
+          Tests
+        </button>
         <button className={`tutor-tab ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
           Users
           {users.some((u) => u.is_approved === false && u.role === 'student') &&
@@ -259,6 +318,102 @@ function AdminPanel() {
             )}
           </div>
         </>
+      ) : tab === 'tests' ? (
+        <div>
+          <p className="tutor-panel-note" style={{ marginBottom: 12, textAlign: 'left' }}>
+            Choose which tests students can see and what each costs. Hidden tests are not shown to students at all.
+            Tutors always see every test and can still make access codes for hidden ones. New uploads start hidden
+            and free until you publish them here.
+          </p>
+          {testsError && (
+            <p className="student-entry-error" style={{ marginBottom: 12 }}>
+              {testsError}
+            </p>
+          )}
+          <div className="card" style={{ padding: 0, overflow: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+                  <th style={{ padding: '12px 16px' }}>Test</th>
+                  <th style={{ padding: '12px 16px' }}>Visible to students</th>
+                  <th style={{ padding: '12px 16px' }}>Price (K)</th>
+                  <th style={{ padding: '12px 16px' }}>Taken</th>
+                  <th style={{ padding: '12px 16px' }}>Bought</th>
+                </tr>
+              </thead>
+              <tbody>
+                {testRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ padding: 16 }}>
+                      No tests yet.
+                    </td>
+                  </tr>
+                ) : (
+                  testRows.map((tr) => {
+                    const draft = priceDrafts[tr.id]
+                    const dirty = draft !== undefined && draft !== String(tr.price_kwacha)
+                    const parsed = Number(draft)
+                    const validDraft = draft !== undefined && draft.trim() !== '' && Number.isInteger(parsed) && parsed >= 0
+                    return (
+                      <tr key={tr.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+                        <td style={{ padding: '12px 16px' }}>
+                          <strong>{tr.title}</strong>
+                          <div style={{ fontSize: 12 }}>{tr.profession ?? 'OET'}</div>
+                          {testMessage[tr.id] && (
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: testMessage[tr.id] === 'Saved' ? 'inherit' : 'var(--color-danger)',
+                              }}
+                            >
+                              {testMessage[tr.id]}
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={tr.is_published}
+                              disabled={busyTestId === tr.id}
+                              onChange={(e) => saveTest(tr, { is_published: e.target.checked })}
+                            />
+                            {tr.is_published ? 'Visible' : 'Hidden'}
+                          </label>
+                        </td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              value={draft ?? String(tr.price_kwacha)}
+                              onChange={(e) => setPriceDrafts((prev) => ({ ...prev, [tr.id]: e.target.value }))}
+                              style={{ width: 90 }}
+                              aria-label={`Price for ${tr.title}`}
+                            />
+                            {dirty && (
+                              <button
+                                className="btn-primary"
+                                disabled={busyTestId === tr.id || !validDraft}
+                                onClick={() => saveTest(tr, { price: parsed })}
+                              >
+                                Save
+                              </button>
+                            )}
+                            {!dirty && tr.price_kwacha === 0 && <span style={{ fontSize: 12 }}>Free</span>}
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px 16px' }}>{tr.attempt_count}</td>
+                        <td style={{ padding: '12px 16px' }}>{tr.purchase_count}</td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       ) : tab === 'transactions' ? (
         <div className="card" style={{ padding: 0, overflow: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
