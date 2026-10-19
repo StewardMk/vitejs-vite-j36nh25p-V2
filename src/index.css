@@ -51,11 +51,11 @@
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
+  /* Full width: each page / section limits its own content width. (The Vite
+     starter capped this at 1126px with side borders, which squeezed the whole
+     site into a narrow strip on wide screens.) */
+  width: 100%;
   text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
   display: flex;
   flex-direction: column;

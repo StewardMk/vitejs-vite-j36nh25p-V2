@@ -378,7 +378,9 @@
     align-items: center;
     justify-content: space-between;
   
-    padding: 18px 48px;
+    /* The bar spans the full screen, but its content lines up with the page
+       container (--container-width) instead of sticking to the screen edges. */
+    padding: 18px max(48px, calc((100% - var(--container-width)) / 2 + 48px));
   
     background: rgba(255, 255, 255, 0.96);
   
@@ -2543,7 +2545,7 @@
   box-sizing: border-box;
 }
 
-.admin-upload-card { max-width: 820px; margin: 0 auto; }
+.admin-upload-card { width: 100%; max-width: 820px; margin: 0 auto; }
 .admin-upload-intro { color: var(--color-ink-muted); max-width: 650px; }
 .admin-upload-form { display: grid; gap: 18px; margin-top: 28px; }
 .upload-dropzone {
@@ -2591,9 +2593,13 @@
 /* =========================================================
    Tutor dashboard
    ========================================================= */
+/* Shared by the exam catalog, account, tutor dashboard and admin panel.
+   width:100% matters: #root is a flex column, so without it the page shrinks
+   to fit its content (and changes width between tabs). */
 .tutor-dashboard-page {
   min-height: 100vh;
-  max-width: 980px;
+  width: 100%;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 40px 24px 64px;
   box-sizing: border-box;
@@ -2638,6 +2644,7 @@
 }
 
 .tutor-panel { max-width: none; }
+.tutor-panel-narrow { max-width: 640px; }
 .tutor-panel h2 { margin-top: 0; }
 .tutor-panel-note { color: var(--color-ink-muted); font-size: 13px; max-width: 640px; }
 
@@ -2682,7 +2689,9 @@
   letter-spacing: .04em;
 }
 .tutor-table td { padding: 10px 12px; border-bottom: 1px solid var(--color-border-light); vertical-align: middle; }
-.tutor-row-actions { display: flex; gap: 8px; white-space: nowrap; }
+/* Keep this a real table cell (display:flex on a <td> breaks the row layout). */
+.tutor-row-actions { white-space: nowrap; }
+.tutor-row-actions > * + * { margin-left: 8px; }
 .tutor-row-actions .btn-primary,
 .tutor-row-actions .btn-secondary { padding: 6px 12px; font-size: 13px; }
 
@@ -2954,6 +2963,8 @@
      margin: 0 auto;
    }
    .manifest-question-card {
+     margin-left: auto;
+     margin-right: auto;
      background: #f7f9fc;
      border: 1px solid #e0e8f2;
      border-radius: 8px;
