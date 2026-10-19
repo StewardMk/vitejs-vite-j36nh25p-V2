@@ -13,6 +13,15 @@ function generateCode(length = 6) {
   return code
 }
 
+interface StudentRow {
+  id: string
+  email: string
+  full_name: string | null
+  is_approved: boolean
+  created_at: string
+  attempts: { test_id: string; test_title: string; status: string; started_at: string; submitted_at: string | null }[]
+}
+
 interface SubtestResult {
   resultId: string
   raw: number | null
@@ -357,9 +366,14 @@ function TutorDashboard() {
   const [password, setPassword] = useState('')
   const [loginError, setLoginError] = useState('')
 
-  const [view, setView] = useState<'generate' | 'results'>('generate')
+  const [view, setView] = useState<'generate' | 'results' | 'students'>('generate')
 
   const [tests, setTests] = useState<{ id: string; title: string }[]>([])
+  const [students, setStudents] = useState<StudentRow[]>([])
+  const [studentsLoading, setStudentsLoading] = useState(false)
+  const [studentsError, setStudentsError] = useState('')
+  const [studentSearch, setStudentSearch] = useState('')
+  const [openStudentId, setOpenStudentId] = useState<string | null>(null)
   const [selectedTestId, setSelectedTestId] = useState('')
   const [validHours, setValidHours] = useState(3)
   const [maxUses, setMaxUses] = useState(20)
@@ -416,6 +430,20 @@ function TutorDashboard() {
         if (data) setTests(data)
       })
   }, [session])
+
+  useEffect(() => {
+    if (!session || view !== 'students') return
+    setStudentsLoading(true)
+    setStudentsError('')
+    supabase.rpc('tutor_list_students').then(({ data, error }) => {
+      setStudentsLoading(false)
+      if (error) {
+        setStudentsError(error.message)
+        return
+      }
+      setStudents((data as StudentRow[]) ?? [])
+    })
+  }, [session, view])
 
   useEffect(() => {
     if (!session || view !== 'results') return
@@ -739,6 +767,12 @@ function TutorDashboard() {
           >
             Results
           </button>
+          <button
+            className={`tutor-tab ${view === 'students' ? 'active' : ''}`}
+            onClick={() => setView('students')}
+          >
+            Students
+          </button>
         </div>
 
         {view === 'generate' && (
@@ -791,6 +825,99 @@ function TutorDashboard() {
                   Valid until {new Date(generatedCode.expiresAt).toLocaleString()} · max {generatedCode.maxUses}{' '}
                   students
                 </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {view === 'students' && (
+          <div className="tutor-panel card">
+            <h2>Student accounts</h2>
+            <p className="tutor-panel-note">
+              Tests each student account has already taken, so you can avoid giving them the same test again.
+            </p>
+
+            <div className="tutor-field">
+              <input
+                type="search"
+                placeholder="Search by name or email"
+                value={studentSearch}
+                onChange={(e) => setStudentSearch(e.target.value)}
+              />
+            </div>
+
+            {studentsError && <p className="student-entry-error">{studentsError}</p>}
+
+            {studentsLoading ? (
+              <p>Loading…</p>
+            ) : (
+              <div className="tutor-table-wrap">
+                <table className="tutor-table">
+                  <thead>
+                    <tr>
+                      <th>Student</th>
+                      <th>Email</th>
+                      <th>Tests taken</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {students
+                      .filter((st) => {
+                        const q = studentSearch.trim().toLowerCase()
+                        return !q || `${st.full_name ?? ''} ${st.email}`.toLowerCase().includes(q)
+                      })
+                      .map((st) => {
+                        const done = st.attempts.filter((a) => a.submitted_at)
+                        const isOpen = openStudentId === st.id
+                        return (
+                          <Fragment key={st.id}>
+                            <tr>
+                              <td>
+                                {st.full_name || '—'}
+                                {st.is_approved === false && ' (pending approval)'}
+                              </td>
+                              <td>{st.email}</td>
+                              <td>{done.length}</td>
+                              <td>
+                                <button
+                                  className="btn-secondary"
+                                  onClick={() => setOpenStudentId(isOpen ? null : st.id)}
+                                >
+                                  {isOpen ? 'Hide' : 'View'}
+                                </button>
+                              </td>
+                            </tr>
+                            {isOpen && (
+                              <tr>
+                                <td colSpan={4} style={{ textAlign: 'left' }}>
+                                  {st.attempts.length === 0 ? (
+                                    <em>No tests taken yet.</em>
+                                  ) : (
+                                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                                      {st.attempts.map((a, i) => (
+                                        <li key={i}>
+                                          {a.test_title} &mdash;{' '}
+                                          {a.submitted_at
+                                            ? `completed ${new Date(a.submitted_at).toLocaleDateString()}`
+                                            : `started ${new Date(a.started_at).toLocaleDateString()}, not finished`}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        )
+                      })}
+                    {students.length === 0 && !studentsLoading && (
+                      <tr>
+                        <td colSpan={4}>No student accounts yet.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
