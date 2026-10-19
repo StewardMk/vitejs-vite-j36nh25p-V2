@@ -23,6 +23,7 @@ function StudentAuthPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [checkEmail, setCheckEmail] = useState(false)
+  const [awaitingApproval, setAwaitingApproval] = useState(false)
 
   const navigate = useNavigate()
   const next = searchParams.get('next') || '/exams'
@@ -49,23 +50,53 @@ function StudentAuthPage() {
         setError(extractErrorMessage(signUpError))
         return
       }
-      if (!data.session) {
-        // Email confirmation is turned on for this project -- there's no
-        // session yet until the student clicks the link in their inbox.
+      if (data.user && !data.session && !data.user.email_confirmed_at && data.user.identities?.length) {
+        // Email confirmation is turned on for this project -- the student
+        // must click the link in their inbox first.
         setCheckEmail(true)
         return
       }
-      navigate(next, { replace: true })
+      // Every new account waits for an admin to approve it.
+      setAwaitingApproval(true)
       return
     }
 
-    const { error: signInError } = await signInStudent(email.trim(), password)
+    const { error: signInError, pending } = await signInStudent(email.trim(), password)
     setLoading(false)
     if (signInError) {
       setError(extractErrorMessage(signInError))
       return
     }
+    if (pending) {
+      setAwaitingApproval(true)
+      return
+    }
     navigate(next, { replace: true })
+  }
+
+  if (awaitingApproval) {
+    return (
+      <>
+        <SiteNav />
+        <div className="student-entry-page">
+          <div className="student-entry-layout">
+            <div className="student-entry-card" style={{ margin: '0 auto' }}>
+              <h2>Waiting for approval</h2>
+              <p className="student-entry-card-subtitle">
+                Your account is created but an administrator has to approve it before you can
+                sign in and see the practice tests. Please try again later.
+              </p>
+              <button
+                className="btn-primary student-entry-submit"
+                onClick={() => { setAwaitingApproval(false); setMode('login'); setPassword('') }}
+              >
+                Back to log in
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    )
   }
 
   if (checkEmail) {

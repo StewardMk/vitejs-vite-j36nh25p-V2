@@ -21,6 +21,8 @@ interface UserRow {
   role: 'student' | 'tutor' | 'admin'
   is_banned: boolean
   created_at: string
+  /** false = waiting for admin approval (undefined if the approval migration hasn't been run). */
+  is_approved?: boolean
 }
 
 interface UserDetail {
@@ -162,6 +164,18 @@ function AdminPanel() {
     setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: role as UserRow['role'] } : u)))
   }
 
+  async function setApproved(userId: string, approved: boolean) {
+    setBusyUserId(userId)
+    setUserActionError((prev) => ({ ...prev, [userId]: '' }))
+    const { data, error } = await supabase.rpc('admin_set_user_approved', { p_user_id: userId, p_approved: approved })
+    setBusyUserId(null)
+    if (error || data?.error) {
+      setUserActionError((prev) => ({ ...prev, [userId]: error?.message ?? data?.error }))
+      return
+    }
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, is_approved: approved } : u)))
+  }
+
   async function toggleBan(userId: string, banned: boolean) {
     setBusyUserId(userId)
     setUserActionError((prev) => ({ ...prev, [userId]: '' }))
@@ -192,6 +206,8 @@ function AdminPanel() {
         </button>
         <button className={`tutor-tab ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
           Users
+          {users.some((u) => u.is_approved === false && u.role === 'student') &&
+            ` (${users.filter((u) => u.is_approved === false && u.role === 'student').length} pending)`}
         </button>
       </div>
 
@@ -312,13 +328,37 @@ function AdminPanel() {
                     </select>
                   </td>
                   <td style={{ padding: '12px 16px' }}>
-                    {u.is_banned ? <span style={{ color: 'var(--color-danger)' }}>Banned</span> : 'Active'}
+                    {u.is_banned ? (
+                      <span style={{ color: 'var(--color-danger)' }}>Banned</span>
+                    ) : u.is_approved === false && u.role === 'student' ? (
+                      <strong>Pending approval</strong>
+                    ) : (
+                      'Active'
+                    )}
                   </td>
                   <td style={{ padding: '12px 16px' }}>{new Date(u.created_at).toLocaleDateString()}</td>
                   <td style={{ padding: '12px 16px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button className="btn-secondary" onClick={() => openUserDetail(u.id)}>
                       View
                     </button>
+                    {u.is_approved === false && u.role === 'student' && (
+                      <button
+                        className="btn-primary"
+                        disabled={busyUserId === u.id}
+                        onClick={() => setApproved(u.id, true)}
+                      >
+                        Approve
+                      </button>
+                    )}
+                    {u.is_approved === true && u.role === 'student' && (
+                      <button
+                        className="btn-secondary"
+                        disabled={busyUserId === u.id}
+                        onClick={() => setApproved(u.id, false)}
+                      >
+                        Revoke
+                      </button>
+                    )}
                     <button
                       className="btn-secondary"
                       disabled={busyUserId === u.id}

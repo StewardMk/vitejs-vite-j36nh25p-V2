@@ -715,7 +715,7 @@ function TutorDashboard() {
   return (
     <>
       <SiteNav />
-      <div className="tutor-dashboard-page">
+      <div className="tutor-dashboard-page" style={view === 'results' ? { maxWidth: 1400 } : undefined}>
         <div className="tutor-dashboard-header">
           <div>
             <span className="eyebrow">Tutor dashboard</span>
@@ -742,7 +742,7 @@ function TutorDashboard() {
         </div>
 
         {view === 'generate' && (
-          <div className="tutor-panel card">
+          <div className="tutor-panel tutor-panel-narrow card">
             <h2>Generate access code</h2>
 
             <div className="tutor-field">

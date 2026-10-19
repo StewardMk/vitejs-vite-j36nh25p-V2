@@ -4,7 +4,14 @@ import { supabase } from './supabase'
 export interface Profile {
   id: string
   full_name: string | null
-  role: 'student' | 'tutor'
+  role: 'student' | 'tutor' | 'admin'
+  /** false = new account still waiting for an admin to approve it. */
+  is_approved?: boolean
+}
+
+/** Students must be approved by an admin; tutors and admins never wait. */
+export function isPendingApproval(profile: Pick<Profile, 'role' | 'is_approved'> | null) {
+  return !!profile && profile.role === 'student' && profile.is_approved === false
 }
 
 /**
@@ -24,10 +31,16 @@ export function useAuthSession() {
     async function loadProfile(userId: string) {
       const { data } = await supabase
         .from('profiles')
-        .select('id, full_name, role')
+        .select('*')
         .eq('id', userId)
         .single()
       if (!active) return
+      if (isPendingApproval(data as Profile | null)) {
+        // Not approved yet: end the session so the rest of the site treats
+        // this visitor as signed out.
+        await supabase.auth.signOut()
+        return
+      }
       setProfile((data as Profile) ?? null)
       setLoading(false)
     }
@@ -58,15 +71,25 @@ export function useAuthSession() {
 }
 
 export async function signUpStudent(email: string, password: string, fullName: string) {
-  return supabase.auth.signUp({
+  const result = await supabase.auth.signUp({
     email,
     password,
     options: { data: { full_name: fullName } },
   })
+  // New accounts wait for admin approval, so never keep the new session.
+  if (!result.error && result.data.session) await supabase.auth.signOut()
+  return result
 }
 
 export async function signInStudent(email: string, password: string) {
-  return supabase.auth.signInWithPassword({ email, password })
+  const result = await supabase.auth.signInWithPassword({ email, password })
+  if (result.error || !result.data.user) return { ...result, pending: false }
+  const { data } = await supabase.from('profiles').select('*').eq('id', result.data.user.id).single()
+  if (isPendingApproval(data as Profile | null)) {
+    await supabase.auth.signOut()
+    return { ...result, pending: true }
+  }
+  return { ...result, pending: false }
 }
 
 export async function signOutStudent() {

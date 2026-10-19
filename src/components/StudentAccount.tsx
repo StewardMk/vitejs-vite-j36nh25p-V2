@@ -82,7 +82,7 @@ function StudentAccount() {
   return (
     <>
       <SiteNav />
-      <div className="tutor-dashboard-page">
+      <div className="tutor-dashboard-page" style={{ maxWidth: 900 }}>
         <div className="tutor-dashboard-header">
           <div>
             <span className="eyebrow">My account</span>
