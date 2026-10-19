@@ -13,25 +13,8 @@ function SiteNav() {
         className="nav-logo"
         style={{ display: 'flex', alignItems: 'center', gap: 10 }}
       >
-        <span
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: 9,
-            background: 'var(--color-primary)',
-            color: '#FFFFFF',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 11,
-            fontFamily: 'var(--font-mono)',
-            fontWeight: 700,
-            boxShadow: '0 5px 12px rgba(23, 105, 224, 0.20)',
-          }}
-        >
-          OET
-        </span>
-        <span>Training Centre</span>
+        <img src="/logo.png" alt="YouEngage OET Training Centre" width={40} height={40} style={{ display: 'block', borderRadius: '50%' }} />
+        <span>YouEngage OET</span>
       </Link>
     </nav>
   )

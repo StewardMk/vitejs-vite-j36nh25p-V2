@@ -113,7 +113,7 @@ function ExamPreview() {
           width: 300,
           height: 300,
           borderRadius: '50%',
-          background: 'rgba(23, 105, 224, 0.08)',
+          background: 'rgba(0, 95, 175, 0.08)',
           right: -40,
           top: -50,
         }}
@@ -212,7 +212,7 @@ function ExamPreview() {
                 height: 36,
                 margin: '0 auto 25px',
                 borderRadius: 10,
-                background: '#1769E0',
+                background: '#005FAF',
                 color: '#FFFFFF',
                 display: 'flex',
                 alignItems: 'center',
@@ -232,8 +232,8 @@ function ExamPreview() {
                   height: 34,
                   margin: '0 auto 8px',
                   borderRadius: 8,
-                  background: item === 2 ? '#EAF2FF' : 'transparent',
-                  color: item === 2 ? '#1769E0' : '#94A3B8',
+                  background: item === 2 ? '#E5EFF9' : 'transparent',
+                  color: item === 2 ? '#005FAF' : '#94A3B8',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -288,8 +288,8 @@ function ExamPreview() {
                   gap: 6,
                   padding: '6px 9px',
                   borderRadius: 999,
-                  background: '#EAF2FF',
-                  color: '#1769E0',
+                  background: '#E5EFF9',
+                  color: '#005FAF',
                   fontFamily: 'monospace',
                   fontSize: 10,
                   fontWeight: 600,
@@ -341,7 +341,7 @@ function ExamPreview() {
                   border: `1px solid ${
                     item === 2 ? '#A9C7EE' : '#E3EAF2'
                   }`,
-                  background: item === 2 ? '#F4F8FF' : '#FFFFFF',
+                  background: item === 2 ? '#F2F7FC' : '#FFFFFF',
                   borderRadius: 8,
                   marginBottom: 8,
                 }}
@@ -352,7 +352,7 @@ function ExamPreview() {
                     height: 16,
                     borderRadius: '50%',
                     border: `1.5px solid ${
-                      item === 2 ? '#1769E0' : '#CBD5E1'
+                      item === 2 ? '#005FAF' : '#CBD5E1'
                     }`,
                     display: 'flex',
                     alignItems: 'center',
@@ -365,7 +365,7 @@ function ExamPreview() {
                         width: 7,
                         height: 7,
                         borderRadius: '50%',
-                        background: '#1769E0',
+                        background: '#005FAF',
                       }}
                     />
                   )}
@@ -393,7 +393,7 @@ function ExamPreview() {
                 style={{
                   padding: '8px 15px',
                   borderRadius: 8,
-                  background: '#1769E0',
+                  background: '#005FAF',
                   color: '#FFFFFF',
                   fontSize: 10,
                   fontWeight: 600,
@@ -429,7 +429,7 @@ function ExamPreview() {
             height: 38,
             borderRadius: 11,
             background: '#ECFDF3',
-            color: '#16A34A',
+            color: '#3F9928',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -486,26 +486,9 @@ function Homepage() {
             gap: 10,
           }}
         >
-          <span
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 9,
-              background: 'var(--color-primary)',
-              color: '#FFFFFF',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 11,
-              fontFamily: 'var(--font-mono)',
-              fontWeight: 700,
-              boxShadow: '0 5px 12px rgba(23, 105, 224, 0.20)',
-            }}
-          >
-            OET
-          </span>
+          <img src="/logo.png" alt="YouEngage OET Training Centre" width={40} height={40} style={{ display: 'block', borderRadius: '50%' }} />
 
-          <span>Training Centre</span>
+          <span>YouEngage OET</span>
         </Link>
 
         <div className="nav-links">
@@ -538,7 +521,7 @@ function Homepage() {
 
           <h1>
             Prepare for OET with
-            <span style={{ color: 'var(--color-primary)' }}>
+            <span style={{ color: 'var(--color-success)' }}>
               {' '}confidence.
             </span>
           </h1>
@@ -770,8 +753,8 @@ function Homepage() {
                 width: 50,
                 height: 50,
                 borderRadius: 14,
-                background: '#EAF2FF',
-                color: '#1769E0',
+                background: '#E5EFF9',
+                color: '#005FAF',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -819,8 +802,8 @@ function Homepage() {
                 width: 50,
                 height: 50,
                 borderRadius: 14,
-                background: '#EFF6FF',
-                color: '#0B5CAD',
+                background: '#EAF3FB',
+                color: '#0356A6',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -869,7 +852,7 @@ function Homepage() {
                 height: 50,
                 borderRadius: 14,
                 background: '#F0F7FF',
-                color: '#1769E0',
+                color: '#005FAF',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -1011,36 +994,47 @@ function Homepage() {
 
 
       {/* =====================================================
-          TESTIMONIAL PLACEHOLDER
+          CONTACT
           ===================================================== */}
 
-      <section className="section">
-        <div className="quote-block">
-          <div
-            style={{
-              width: 42,
-              height: 42,
-              margin: '0 auto 18px',
-              borderRadius: '50%',
-              background: 'var(--color-primary-light)',
-              color: 'var(--color-primary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontFamily: 'Georgia, serif',
-              fontSize: 22,
-            }}
+      <section className="section" id="contact">
+        <div className="section-heading">
+          <span className="folder-tab">Contact us</span>
+
+          <h2>Get in touch</h2>
+
+          <p>Questions about the practice tests or your account? We would love to hear from you.</p>
+        </div>
+
+        <div className="contact-grid">
+          <a className="contact-card" href="tel:+260979760113">
+            <span className="contact-label">Phone</span>
+            <strong>+260 979 760 113</strong>
+          </a>
+
+          <a className="contact-card" href="mailto:youengageoettrainingcentre@gmail.com">
+            <span className="contact-label">Email</span>
+            <strong>youengageoettrainingcentre@gmail.com</strong>
+          </a>
+
+          <a
+            className="contact-card"
+            href="https://www.instagram.com/youengageoettrainingcentre"
+            target="_blank"
+            rel="noopener noreferrer"
           >
-            “
-          </div>
+            <span className="contact-label">Instagram</span>
+            <strong>@youengageoettrainingcentre</strong>
+          </a>
 
-          <p>
-            “Your experience here could be the difference
-            between hoping you are ready and knowing you are.”
-          </p>
-
-          <div className="quote-attribution">
-            Candidate feedback · Replace with a real testimonial
+          <div className="contact-card">
+            <span className="contact-label">Visit us</span>
+            <strong>Olympia, Lusaka</strong>
+            <span>
+              Plot 3771, Chilubula Road, behind Manda Hill.
+              <br />
+              Open Monday to Friday, 9:00 AM to 4:00 PM.
+            </span>
           </div>
         </div>
       </section>
@@ -1099,22 +1093,23 @@ function Homepage() {
 
       <footer>
         <div className="footer-inner">
-          <div>
-            <div
-              style={{
-                color: '#FFFFFF',
-                fontFamily: 'var(--font-display)',
-                fontSize: 17,
-                fontWeight: 600,
-                marginBottom: 5,
-              }}
-            >
-              OET Training Centre
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left' }}>
+            <img src="/logo.png" alt="" width={56} height={56} style={{ display: 'block', borderRadius: '50%' }} />
+            <div>
+              <div
+                style={{
+                  color: '#FFFFFF',
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 17,
+                  fontWeight: 600,
+                  marginBottom: 5,
+                }}
+              >
+                YouEngage OET Training Centre
+              </div>
 
-            <span>
-              Computer-based OET preparation and practice.
-            </span>
+              <span>Prepare. Perform. Progress.</span>
+            </div>
           </div>
 
           <div
@@ -1136,6 +1131,13 @@ function Homepage() {
               style={{ textDecoration: 'none' }}
             >
               How it works
+            </a>
+
+            <a
+              href="#contact"
+              style={{ textDecoration: 'none' }}
+            >
+              Contact
             </a>
 
             <Link
@@ -1171,7 +1173,7 @@ function Homepage() {
             color: 'rgba(255,255,255,0.40)',
           }}
         >
-          © {new Date().getFullYear()} OET Training Centre
+          © {new Date().getFullYear()} YouEngage OET Training Centre
         </div>
       </footer>
     </div>
