@@ -188,11 +188,11 @@ function openAnswerComparison(session: SessionSummary) {
           p.meta { color: #64748B; margin-top: 0; }
           table.answers-table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
           table.answers-table th, table.answers-table td { border: 1px solid #E2E8F0; padding: 6px 8px; text-align: left; vertical-align: top; }
-          table.answers-table th { background: #F4F8FF; }
+          table.answers-table th { background: #F2F7FC; }
           tr.right td.mark { color: #1E8E5A; font-weight: 700; }
           tr.wrong td.mark { color: #C0392B; font-weight: 700; }
           tr.wrong td:nth-child(3) { color: #C0392B; }
-          .prompt { background: #F4F8FF; border-radius: 8px; padding: 16px 20px; margin: 12px 0; font-size: 13px; color: #334155; white-space: pre-wrap; }
+          .prompt { background: #F2F7FC; border-radius: 8px; padding: 16px 20px; margin: 12px 0; font-size: 13px; color: #334155; white-space: pre-wrap; }
           .essay { white-space: pre-wrap; line-height: 1.6; font-size: 14px; }
           .no-data { color: #64748B; }
           @media print { table { break-inside: avoid; } }
@@ -250,7 +250,7 @@ function openWritingAnswer(session: SessionSummary) {
           body { font-family: 'Work Sans', Arial, sans-serif; padding: 40px; color: #122033; max-width: 720px; margin: 0 auto; }
           h1 { font-size: 22px; margin-bottom: 4px; }
           p.meta { color: #64748B; margin-top: 0; }
-          .prompt { background: #F4F8FF; border-radius: 8px; padding: 16px 20px; margin: 20px 0; font-size: 13px; color: #334155; white-space: pre-wrap; }
+          .prompt { background: #F2F7FC; border-radius: 8px; padding: 16px 20px; margin: 20px 0; font-size: 13px; color: #334155; white-space: pre-wrap; }
           .essay { white-space: pre-wrap; line-height: 1.6; font-size: 15px; }
         </style>
       </head>
@@ -285,8 +285,8 @@ function openWritingFeedback(session: SessionSummary) {
           p.meta { color: #64748B; margin-top: 0; }
           table { border-collapse: collapse; width: 100%; margin-top: 16px; font-size: 13px; }
           th, td { border: 1px solid #E2E8F0; padding: 8px 10px; text-align: left; vertical-align: top; }
-          th { background: #F4F8FF; }
-          .overall { background: #F4F8FF; border-radius: 8px; padding: 16px 20px; margin: 20px 0; font-size: 14px; white-space: pre-wrap; }
+          th { background: #F2F7FC; }
+          .overall { background: #F2F7FC; border-radius: 8px; padding: 16px 20px; margin: 20px 0; font-size: 14px; white-space: pre-wrap; }
           .concerns { color: #B45309; font-size: 13px; }
           .concerns li { margin-bottom: 4px; }
           .footnote { color: #94A3B8; font-size: 11px; margin-top: 24px; }

@@ -8,13 +8,13 @@
        Brand colours
        ------------------------------------------------------- */
   
-    --color-primary: #1769E0;
-    --color-primary-dark: #0D47A1;
-    --color-primary-light: #EAF2FF;
-    --color-primary-soft: #F4F8FF;
+    --color-primary: #005FAF;
+    --color-primary-dark: #00397D;
+    --color-primary-light: #E5EFF9;
+    --color-primary-soft: #F2F7FC;
   
-    --color-secondary: #0B5CAD;
-    --color-accent: #38BDF8;
+    --color-secondary: #0356A6;
+    --color-accent: #3F9928;
   
     /* -------------------------------------------------------
        Neutrals
@@ -24,8 +24,8 @@
     --color-paper: #FFFFFF;
     --color-background: #F7F9FC;
   
-    --color-ink: #122033;
-    --color-ink-soft: #334155;
+    --color-ink: #0F2A4A;
+    --color-ink-soft: #2B3F5C;
     --color-ink-muted: #64748B;
     --color-ink-light: #94A3B8;
   
@@ -36,8 +36,8 @@
        Status colours
        ------------------------------------------------------- */
   
-    --color-success: #16A34A;
-    --color-success-light: #ECFDF3;
+    --color-success: #3F9928;
+    --color-success-light: #EEF7EA;
   
     --color-warning: #F59E0B;
     --color-warning-light: #FFF7E6;
@@ -58,9 +58,9 @@
     --color-folder: #F7F9FC;
     --color-teal: var(--color-primary);
     --color-teal-dark: var(--color-primary-dark);
-    --color-amber: #2563EB;
-    --color-amber-dark: #1D4ED8;
-    --color-sage: #E8F3FF;
+    --color-amber: #0356A6;
+    --color-amber-dark: #00397D;
+    --color-sage: #E5EFF9;
     --color-brick: var(--color-danger);
   
     /* -------------------------------------------------------
@@ -103,10 +103,10 @@
       0 4px 10px rgba(15, 23, 42, 0.04);
   
     --shadow-button:
-      0 6px 16px rgba(23, 105, 224, 0.22);
+      0 6px 16px rgba(0, 95, 175, 0.22);
   
     --shadow-blue:
-      0 20px 50px rgba(23, 105, 224, 0.18);
+      0 20px 50px rgba(0, 95, 175, 0.18);
   
     /* -------------------------------------------------------
        Layout
@@ -269,7 +269,7 @@
     transform: translateY(-1px);
   
     box-shadow:
-      0 8px 20px rgba(23, 105, 224, 0.28);
+      0 8px 20px rgba(0, 95, 175, 0.28);
   }
   
   .btn-primary:active {
@@ -360,7 +360,7 @@
     border-color: var(--color-primary);
   
     box-shadow:
-      0 0 0 3px rgba(23, 105, 224, 0.10);
+      0 0 0 3px rgba(0, 95, 175, 0.10);
   }
   
   .exam-input::placeholder,
@@ -469,8 +469,8 @@
     background:
       radial-gradient(
         circle,
-        rgba(23, 105, 224, 0.10) 0%,
-        rgba(23, 105, 224, 0.04) 40%,
+        rgba(0, 95, 175, 0.10) 0%,
+        rgba(0, 95, 175, 0.04) 40%,
         transparent 70%
       );
   
@@ -916,7 +916,7 @@
      ========================================================= */
   
   footer {
-    background: #0B1F3A;
+    background: #062B5C;
   
     color: rgba(255, 255, 255, 0.65);
   
@@ -1087,7 +1087,7 @@
   a:focus-visible,
   input:focus-visible,
   textarea:focus-visible {
-    outline: 3px solid rgba(23, 105, 224, 0.25);
+    outline: 3px solid rgba(0, 95, 175, 0.25);
   
     outline-offset: 2px;
   }
@@ -1277,12 +1277,12 @@
   background:
     radial-gradient(
       circle at 15% 20%,
-      rgba(23, 105, 224, 0.08),
+      rgba(0, 95, 175, 0.08),
       transparent 30%
     ),
     radial-gradient(
       circle at 85% 80%,
-      rgba(56, 189, 248, 0.07),
+      rgba(63, 153, 40, 0.07),
       transparent 28%
     ),
     var(--color-background);
@@ -1508,7 +1508,7 @@
   background: #FFFFFF;
 
   box-shadow:
-    0 0 0 3px rgba(23, 105, 224, 0.10);
+    0 0 0 3px rgba(0, 95, 175, 0.10);
 }
 
 
@@ -1824,7 +1824,7 @@
   
     color: var(--color-primary);
   
-    background: #EFF6FF;
+    background: #EAF3FB;
   }
   
   .listening-question-tab.answered {
@@ -1881,7 +1881,7 @@
   
     border-radius: 20px;
   
-    background: #EAF2FF;
+    background: #E5EFF9;
   
     font-size: 30px;
   }
@@ -1986,7 +1986,7 @@
   }
   
   .listening-audio-status.finished {
-    color: #16A34A;
+    color: #3F9928;
   }
   
   .audio-pulse {
@@ -2052,9 +2052,9 @@
   
     border-radius: 10px;
   
-    background: #EFF6FF;
+    background: #EAF3FB;
   
-    border: 1px solid #D8E7F8;
+    border: 1px solid #D3E4F4;
   
     color: var(--color-primary);
   
@@ -2099,7 +2099,7 @@
   
     border-radius: 8px;
   
-    background: #EAF2FF;
+    background: #E5EFF9;
   
     color: var(--color-primary);
   
@@ -2168,7 +2168,7 @@
   
     border-radius: 8px;
   
-    background: #EAF2FF;
+    background: #E5EFF9;
   
     color: var(--color-primary);
   
@@ -2236,7 +2236,7 @@
   .listening-main-card .option-label:has(
     input:checked
   ) {
-    background: #EAF2FF;
+    background: #E5EFF9;
   
     border-color: var(--color-primary);
   
@@ -2385,7 +2385,7 @@
   
     border-radius: 50%;
   
-    background: #EAF2FF;
+    background: #E5EFF9;
   
     color: var(--color-primary);
   
@@ -2442,7 +2442,7 @@
   
     background: #ECFDF3;
   
-    color: #16A34A;
+    color: #3F9928;
   
     font-size: 26px;
   
@@ -3152,3 +3152,58 @@
      border: none;
    }
    
+
+
+/* =========================================================
+   CONTACT SECTION
+   ========================================================= */
+
+.contact-grid {
+  max-width: 880px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+@media (max-width: 700px) {
+  .contact-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.contact-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 24px;
+  background: var(--color-white);
+  border: 1px solid var(--color-border-light);
+  border-top: 3px solid var(--color-success);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  text-align: left;
+  text-decoration: none;
+  color: var(--color-ink-muted);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.contact-card strong {
+  color: var(--color-ink);
+  font-size: 16px;
+}
+
+a.contact-card:hover {
+  border-color: var(--color-primary);
+  border-top-color: var(--color-success);
+}
+
+.contact-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
