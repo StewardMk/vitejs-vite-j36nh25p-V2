@@ -806,7 +806,7 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
             <span className="folder-tab">{page.stage.section}</span>
             <h1>{page.stage.label}</h1>
             <div className="intro-copy">
-              {(INTRO_COPY[page.stage.id] ?? 'Please read the instructions carefully before continuing.')
+              {(((page.stage as { intro_text?: string }).intro_text) ?? INTRO_COPY[page.stage.id] ?? 'Please read the instructions carefully before continuing.')
                 .split('\n\n')
                 .map((block, i) => renderIntroBlock(block, i))}
             </div>
