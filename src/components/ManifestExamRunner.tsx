@@ -340,7 +340,7 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
   const [reloadConfirmOpen, setReloadConfirmOpen] = useState(false)
   const [pdfOpen, setPdfOpen] = useState(false)
   const [pdfPinned, setPdfPinned] = useState(false)
-  const [pdfPanelWidth, setPdfPanelWidth] = useState(480)
+  const [pdfPanelWidth, setPdfPanelWidth] = useState(560)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 

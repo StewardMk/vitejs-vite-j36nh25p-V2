@@ -3081,8 +3081,10 @@
      z-index: 2000;
      display: flex;
      flex-direction: column;
-     overflow: hidden;
+     overflow: visible;
+     max-width: 100vw;
    }
+   .pdf-popup-frame { border-radius: 0 0 8px 8px; }
    .pdf-popup.pinned {
      top: 0;
      height: 100%;
@@ -3136,17 +3138,25 @@
      cursor: pointer;
      font-size: 14px;
    }
-   .pdf-popup-resize-handle {
+   .pdf-popup-edge {
      position: absolute;
-     right: 0;
-     bottom: 0;
-     width: 16px;
-     height: 16px;
-     cursor: nwse-resize;
+     z-index: 3;
      touch-action: none;
-     background:
-       linear-gradient(135deg, transparent 0 50%, rgba(0, 0, 0, 0.25) 50% 60%, transparent 60% 70%, rgba(0, 0, 0, 0.25) 70% 80%, transparent 80% 100%);
    }
+   .pdf-popup-edge-n { top: -3px; left: 12px; right: 12px; height: 9px; cursor: ns-resize; }
+   .pdf-popup-edge-s { bottom: -3px; left: 12px; right: 12px; height: 9px; cursor: ns-resize; }
+   .pdf-popup-edge-e { right: -3px; top: 12px; bottom: 12px; width: 9px; cursor: ew-resize; }
+   .pdf-popup-edge-w { left: -3px; top: 12px; bottom: 12px; width: 9px; cursor: ew-resize; }
+   .pdf-popup-edge-ne { top: -3px; right: -3px; width: 18px; height: 18px; cursor: nesw-resize; }
+   .pdf-popup-edge-nw { top: -3px; left: -3px; width: 18px; height: 18px; cursor: nwse-resize; }
+   .pdf-popup-edge-sw { bottom: -3px; left: -3px; width: 18px; height: 18px; cursor: nesw-resize; }
+   .pdf-popup-edge-se {
+     bottom: 0; right: 0; width: 20px; height: 20px; cursor: nwse-resize;
+     background: linear-gradient(135deg, transparent 0 50%, rgba(0, 0, 0, 0.3) 50% 60%, transparent 60% 70%, rgba(0, 0, 0, 0.3) 70% 80%, transparent 80% 100%);
+   }
+   .pdf-popup.pinned .pdf-popup-edge-e { right: 0; top: 0; bottom: 0; width: 10px; background: rgba(0, 0, 0, 0.06); }
+   .pdf-popup.pinned .pdf-popup-edge-e:hover { background: rgba(0, 95, 175, 0.35); }
+   .pdf-popup.is-busy .pdf-popup-frame { pointer-events: none; }
    .pdf-popup-frame {
      flex: 1;
      border: none;
