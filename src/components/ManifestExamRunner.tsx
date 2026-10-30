@@ -345,6 +345,9 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const saveAttemptRef = useRef(false)
+  // Shared in-flight save, so repeated taps on Continue/Finish all wait for
+  // the same request instead of each creating its own attempt.
+  const savePromiseRef = useRef<Promise<boolean> | null>(null)
 
   const audioRef = useRef<AudioPlayerHandle | null>(null)
   const advanceRef = useRef<() => void>(() => {})
@@ -551,28 +554,36 @@ function ManifestExamRunner({ test, studentName }: { test: any; studentName: str
     setPdfPinned(false)
   }
 
-  async function saveAttempt() {
-    if (saveAttemptRef.current) return true
-    setSaving(true)
-    setSaveError(null)
+  function saveAttempt(): Promise<boolean> {
+    if (saveAttemptRef.current) return Promise.resolve(true)
+    if (savePromiseRef.current) return savePromiseRef.current
 
-    try {
-      const { error } = await supabase.rpc('save_manifest_attempt', {
-        p_test_id: test.id,
-        p_student_name: studentName,
-        p_answers: answers,
-      })
+    const run = (async () => {
+      setSaving(true)
+      setSaveError(null)
 
-      if (error) throw new Error(error.message)
-      saveAttemptRef.current = true
-      return true
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to save your test results.'
-      setSaveError(message)
-      return false
-    } finally {
-      setSaving(false)
-    }
+      try {
+        const { error } = await supabase.rpc('save_manifest_attempt', {
+          p_test_id: test.id,
+          p_student_name: studentName,
+          p_answers: answers,
+        })
+
+        if (error) throw new Error(error.message)
+        saveAttemptRef.current = true
+        return true
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to save your test results.'
+        setSaveError(message)
+        return false
+      } finally {
+        setSaving(false)
+        savePromiseRef.current = null
+      }
+    })()
+
+    savePromiseRef.current = run
+    return run
   }
 
   async function finishTest() {
