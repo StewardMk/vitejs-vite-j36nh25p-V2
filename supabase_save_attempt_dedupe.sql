@@ -1,5 +1,34 @@
 -- Stops the same exam submission being recorded more than once.
--- Touches only public.save_manifest_attempt. Run in the Supabase SQL editor.
+-- Touches only public.save_manifest_attempt and the new public.oet_numbers_to_digits. Run in the Supabase SQL editor.
+
+-- Listening accepts a number as digits or words ("2" = "two", "25" = "twenty five").
+-- New helper in public only; used by public.save_manifest_attempt below.
+CREATE OR REPLACE FUNCTION public.oet_numbers_to_digits(p_text text)
+ RETURNS text
+ LANGUAGE plpgsql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $fn$
+DECLARE
+  s text := lower(btrim(coalesce(p_text, '')));
+  tens_words text[] := ARRAY['twenty','thirty','forty','fourty','fifty','sixty','seventy','eighty','ninety'];
+  tens_vals  int[]  := ARRAY[20,30,40,40,50,60,70,80,90];
+  unit_words text[] := ARRAY['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+  i int;
+  j int;
+BEGIN
+  FOR i IN 1..array_length(tens_words, 1) LOOP
+    FOR j IN 1..9 LOOP
+      s := regexp_replace(s, '\m' || tens_words[i] || '[[:space:]-]+' || unit_words[j + 1] || '\M', (tens_vals[i] + j)::text, 'g');
+    END LOOP;
+    s := regexp_replace(s, '\m' || tens_words[i] || '\M', tens_vals[i]::text, 'g');
+  END LOOP;
+  FOR j IN 1..array_length(unit_words, 1) LOOP
+    s := regexp_replace(s, '\m' || unit_words[j] || '\M', (j - 1)::text, 'g');
+  END LOOP;
+  RETURN regexp_replace(s, '[[:space:]]+', ' ', 'g');
+END;
+$fn$;
 
 CREATE OR REPLACE FUNCTION public.save_manifest_attempt(p_test_id uuid, p_student_name text, p_answers jsonb)
  RETURNS jsonb
@@ -77,7 +106,7 @@ BEGIN
         v_given := p_answers->>(v_question->>'id');
         IF v_section = 'listening' THEN
           listening_total := listening_total + 1;
-          IF v_given IS NOT NULL AND lower(trim(v_given)) = lower(trim(v_correct)) THEN
+          IF v_given IS NOT NULL AND public.oet_numbers_to_digits(v_given) = public.oet_numbers_to_digits(v_correct) THEN
             listening_raw := listening_raw + 1;
           END IF;
         ELSIF v_section = 'reading' THEN
@@ -98,7 +127,7 @@ BEGIN
           v_given := p_answers->>(v_question->>'id');
           IF v_section = 'listening' THEN
             listening_total := listening_total + 1;
-            IF v_given IS NOT NULL AND lower(trim(v_given)) = lower(trim(v_correct)) THEN
+            IF v_given IS NOT NULL AND public.oet_numbers_to_digits(v_given) = public.oet_numbers_to_digits(v_correct) THEN
               listening_raw := listening_raw + 1;
             END IF;
           ELSIF v_section = 'reading' THEN

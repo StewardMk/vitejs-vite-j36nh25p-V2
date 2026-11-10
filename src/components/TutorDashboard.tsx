@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import SiteNav from './SiteNav'
 import { formatListeningReading, formatWriting } from '../lib/oetGrading'
+import { answersEqual } from '../lib/answerMatch'
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
@@ -78,10 +79,10 @@ function displayAnswer(q: any, raw: string | null | undefined): string {
   return raw
 }
 
-function answersMatch(q: any, raw: string | null | undefined): boolean | null {
+function answersMatch(q: any, raw: string | null | undefined, subtest: string): boolean | null {
   if (q.correct_answer === null || q.correct_answer === undefined) return null
   if (raw === null || raw === undefined || raw === '') return false
-  return raw.toString().trim().toLowerCase() === String(q.correct_answer).trim().toLowerCase()
+  return answersEqual(raw, q.correct_answer, subtest)
 }
 
 // Walks every scorable (non-writing) question in the manifest and pairs it
@@ -103,7 +104,7 @@ function collectComparisonRows(manifest: any, answers: Record<string, string>): 
         questionText: questionPrompt(q),
         studentDisplay: displayAnswer(q, raw),
         correctDisplay: q.correct_answer != null ? displayAnswer(q, q.correct_answer) : '—',
-        isCorrect: answersMatch(q, raw),
+        isCorrect: answersMatch(q, raw, subtest),
       })
     }
 
@@ -1087,4 +1088,4 @@ function TutorDashboard() {
   )
 }
 
-export default TutorDashboard
+export default TutorDashboard
