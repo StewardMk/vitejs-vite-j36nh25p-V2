@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import PortalLayout, { type NavGroup } from './PortalLayout'
+import ResourceLibrary from './ResourceLibrary'
 
 interface PurchaseRow {
   id: string
@@ -87,7 +89,8 @@ function StatTile({ label, value }: { label: string; value: string }) {
 }
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'overview' | 'transactions' | 'users' | 'tests'>('overview')
+  const [tab, setTab] = useState<'overview' | 'transactions' | 'users' | 'tests' | 'resources'>('overview')
+  const [me, setMe] = useState<{ id: string; name: string }>({ id: '', name: 'Admin' })
   const [purchases, setPurchases] = useState<PurchaseRow[]>([])
   const [users, setUsers] = useState<UserRow[]>([])
   const [testRows, setTestRows] = useState<TestRow[]>([])
@@ -106,6 +109,12 @@ function AdminPanel() {
 
   useEffect(() => {
     loadAll()
+    supabase.auth.getSession().then(async ({ data }) => {
+      const u = data.session?.user
+      if (!u) return
+      const { data: prof } = await supabase.from('profiles').select('full_name').eq('id', u.id).single()
+      setMe({ id: u.id, name: prof?.full_name || u.email || 'Admin' })
+    })
   }, [])
 
   async function loadTests() {
@@ -244,39 +253,59 @@ function AdminPanel() {
     setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, is_banned: banned } : u)))
   }
 
+  const pendingCount = users.filter((u) => u.is_approved === false && u.role === 'student').length
+  const groups: NavGroup[] = [
+    {
+      items: [
+        { key: 'overview', label: 'Overview', icon: 'home' },
+        { key: 'transactions', label: 'Transactions', icon: 'card' },
+      ],
+    },
+    {
+      label: 'Manage',
+      items: [
+        { key: 'tests', label: 'Tests & pricing', icon: 'tests' },
+        { key: 'users', label: 'Users', icon: 'users', badge: pendingCount || undefined },
+        { key: 'resources', label: 'Resources', icon: 'folder' },
+      ],
+    },
+    {
+      label: 'Go to',
+      items: [
+        { key: 'upload', label: 'Upload exam', icon: 'upload', to: '/admin' },
+        { key: 'tutor', label: 'Tutor portal', icon: 'book', to: '/tutor' },
+      ],
+    },
+  ]
+  const titles: Record<typeof tab, [string, string]> = {
+    overview: ['Overview', 'Revenue and activity at a glance'],
+    transactions: ['Transactions', 'Every purchase and its status'],
+    tests: ['Tests & pricing', 'Choose what students see and what it costs'],
+    users: ['Users', 'Approve accounts and manage roles'],
+    resources: ['Resources', 'Tutor guides, printable tests and answer keys'],
+  }
+
   return (
-    <div className="tutor-dashboard-page" style={{ maxWidth: 1100 }}>
-      <div className="tutor-dashboard-header">
-        <div>
-          <span className="eyebrow">Admin panel</span>
-          <h1>Financials &amp; user management</h1>
-        </div>
-      </div>
-
-      <div className="tutor-tabs">
-        <button className={`tutor-tab ${tab === 'overview' ? 'active' : ''}`} onClick={() => setTab('overview')}>
-          Overview
-        </button>
-        <button className={`tutor-tab ${tab === 'transactions' ? 'active' : ''}`} onClick={() => setTab('transactions')}>
-          Transactions
-        </button>
-        <button className={`tutor-tab ${tab === 'tests' ? 'active' : ''}`} onClick={() => setTab('tests')}>
-          Tests
-        </button>
-        <button className={`tutor-tab ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
-          Users
-          {users.some((u) => u.is_approved === false && u.role === 'student') &&
-            ` (${users.filter((u) => u.is_approved === false && u.role === 'student').length} pending)`}
-        </button>
-      </div>
-
+    <PortalLayout
+      portalName="Admin portal"
+      groups={groups}
+      active={tab}
+      onSelect={(k) => setTab(k as typeof tab)}
+      userName={me.name}
+      userRole="admin"
+      onSignOut={() => supabase.auth.signOut()}
+      title={titles[tab][0]}
+      subtitle={titles[tab][1]}
+    >
       {loadError && (
         <p className="student-entry-error" style={{ marginBottom: 16 }}>
           <span>{loadError}</span>
         </p>
       )}
 
-      {loading ? (
+      {tab === 'resources' ? (
+        <ResourceLibrary userId={me.id} canDelete />
+      ) : loading ? (
         <p>Loading…</p>
       ) : tab === 'overview' ? (
         <>
@@ -591,7 +620,7 @@ function AdminPanel() {
           </div>
         </div>
       )}
-    </div>
+    </PortalLayout>
   )
 }
 

@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import SiteNav from './SiteNav'
+import PortalLayout, { StatCard, type NavGroup } from './PortalLayout'
+import ResourceLibrary from './ResourceLibrary'
 import { formatListeningReading, formatWriting } from '../lib/oetGrading'
 import { answersEqual } from '../lib/answerMatch'
 
@@ -367,7 +369,9 @@ function TutorDashboard() {
   const [password, setPassword] = useState('')
   const [loginError, setLoginError] = useState('')
 
-  const [view, setView] = useState<'generate' | 'results' | 'students'>('generate')
+  const [staffRole, setStaffRole] = useState('tutor')
+  const [staffName, setStaffName] = useState('')
+  const [view, setView] = useState<'overview' | 'resources' | 'generate' | 'results' | 'students'>('overview')
 
   const [tests, setTests] = useState<{ id: string; title: string }[]>([])
   const [students, setStudents] = useState<StudentRow[]>([])
@@ -399,8 +403,10 @@ function TutorDashboard() {
 
   useEffect(() => {
     async function checkRole(userId: string) {
-      const { data } = await supabase.from('profiles').select('role').eq('id', userId).single()
+      const { data } = await supabase.from('profiles').select('role, full_name').eq('id', userId).single()
       setIsTutor(data?.role === 'tutor' || data?.role === 'admin')
+      setStaffRole(data?.role ?? 'tutor')
+      setStaffName(data?.full_name ?? '')
       setCheckingSession(false)
     }
 
@@ -433,7 +439,7 @@ function TutorDashboard() {
   }, [session])
 
   useEffect(() => {
-    if (!session || view !== 'students') return
+    if (!session || (view !== 'students' && view !== 'overview')) return
     setStudentsLoading(true)
     setStudentsError('')
     supabase.rpc('tutor_list_students').then(({ data, error }) => {
@@ -447,7 +453,7 @@ function TutorDashboard() {
   }, [session, view])
 
   useEffect(() => {
-    if (!session || view !== 'results') return
+    if (!session || (view !== 'results' && view !== 'overview')) return
     loadResults()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, view])
@@ -741,40 +747,104 @@ function TutorDashboard() {
     )
   }
 
-  return (
-    <>
-      <SiteNav />
-      <div className="tutor-dashboard-page" style={view === 'results' ? { maxWidth: 1400 } : undefined}>
-        <div className="tutor-dashboard-header">
-          <div>
-            <span className="eyebrow">Tutor dashboard</span>
-            <h1>Manage tests &amp; results</h1>
-          </div>
-          <button className="btn-secondary" onClick={handleSignOut}>
-            Sign out
-          </button>
-        </div>
+  const awaitingGrade = sessions.filter((x) => x.writing && x.writing.raw === null)
+  const groups: NavGroup[] = [
+    {
+      items: [
+        { key: 'overview', label: 'Overview', icon: 'home' },
+        { key: 'resources', label: 'Resources', icon: 'folder' },
+      ],
+    },
+    {
+      label: 'Teaching',
+      items: [
+        { key: 'generate', label: 'Access codes', icon: 'key' },
+        { key: 'results', label: 'Results', icon: 'chart', badge: awaitingGrade.length || undefined },
+        { key: 'students', label: 'Students', icon: 'users' },
+      ],
+    },
+    {
+      label: 'Tools',
+      items: [
+        { key: 'upload', label: 'Upload exam', icon: 'upload', to: '/admin' },
+        ...(staffRole === 'admin' ? [{ key: 'admin', label: 'Admin panel', icon: 'tests' as const, to: '/admin-panel' }] : []),
+      ],
+    },
+  ]
+  const titles: Record<typeof view, [string, string]> = {
+    overview: ['Overview', 'What needs your attention today'],
+    resources: ['Resources', 'Tutor guides, printable tests and answer keys'],
+    generate: ['Access codes', 'Let a class sit a test without creating accounts'],
+    results: ['Results', 'Marks, writing grading and answer comparisons'],
+    students: ['Students', 'Student accounts and the tests they have taken'],
+  }
 
-        <div className="tutor-tabs">
-          <button
-            className={`tutor-tab ${view === 'generate' ? 'active' : ''}`}
-            onClick={() => setView('generate')}
-          >
-            Generate code
-          </button>
-          <button
-            className={`tutor-tab ${view === 'results' ? 'active' : ''}`}
-            onClick={() => setView('results')}
-          >
-            Results
-          </button>
-          <button
-            className={`tutor-tab ${view === 'students' ? 'active' : ''}`}
-            onClick={() => setView('students')}
-          >
-            Students
-          </button>
-        </div>
+  return (
+    <PortalLayout
+      portalName="Tutor portal"
+      groups={groups}
+      active={view}
+      onSelect={(k) => setView(k as typeof view)}
+      userName={staffName || session.user.email}
+      userRole={staffRole}
+      onSignOut={handleSignOut}
+      title={titles[view][0]}
+      subtitle={titles[view][1]}
+      wide={view === 'results'}
+    >
+        {view === 'overview' && (
+          <>
+            <div className="stat-grid">
+              <StatCard icon="users" label="Student accounts" value={students.length} />
+              <StatCard icon="tests" label="Exam sessions" value={sessions.length} sub="Most recent 300 results" />
+              <StatCard icon="clock" tone={awaitingGrade.length ? 'amber' : 'green'} label="Writing awaiting a grade" value={awaitingGrade.length} />
+            </div>
+            <div className="panel-grid">
+              <div className="panel">
+                <h2>Needs grading</h2>
+                <p className="panel-sub">Writing tasks with no score yet</p>
+                {awaitingGrade.length === 0 ? (
+                  <div className="empty-state"><strong>All caught up</strong>No writing tasks are waiting.</div>
+                ) : (
+                  <>
+                    {awaitingGrade.slice(0, 6).map((x) => (
+                      <div key={x.sessionGroupId} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--color-border-light)', fontSize: 14 }}>
+                        <span><strong>{x.studentName}</strong><br /><span style={{ color: 'var(--color-ink-muted)', fontSize: 12 }}>{x.testTitle}</span></span>
+                        <span style={{ color: 'var(--color-ink-muted)', fontSize: 12 }}>{new Date(x.latestSubmittedAt).toLocaleDateString()}</span>
+                      </div>
+                    ))}
+                    <button className="btn-primary" style={{ marginTop: 14 }} onClick={() => setView('results')}>Open results</button>
+                  </>
+                )}
+              </div>
+              <div className="panel">
+                <h2>Recent submissions</h2>
+                <p className="panel-sub">Latest exam sessions</p>
+                {sessions.length === 0 ? (
+                  <div className="empty-state"><strong>No submissions yet</strong>Results appear here as students finish.</div>
+                ) : (
+                  sessions.slice(0, 6).map((x) => (
+                    <div key={x.sessionGroupId} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--color-border-light)', fontSize: 14 }}>
+                      <span><strong>{x.studentName}</strong><br /><span style={{ color: 'var(--color-ink-muted)', fontSize: 12 }}>{x.testTitle}</span></span>
+                      <span style={{ color: 'var(--color-ink-muted)', fontSize: 12 }}>{new Date(x.latestSubmittedAt).toLocaleDateString()}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="panel">
+                <h2>Quick actions</h2>
+                <p className="panel-sub">Jump straight to common jobs</p>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <button className="btn-secondary" onClick={() => setView('generate')}>Generate an access code</button>
+                  <button className="btn-secondary" onClick={() => setView('resources')}>Download a tutor guide or printable test</button>
+                  <button className="btn-secondary" onClick={() => setView('students')}>Look up a student</button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {view === 'resources' && <ResourceLibrary userId={session.user.id} canDelete={staffRole === 'admin'} />}
 
         {view === 'generate' && (
           <div className="tutor-panel tutor-panel-narrow card">
@@ -1083,8 +1153,7 @@ function TutorDashboard() {
             )}
           </div>
         )}
-      </div>
-    </>
+    </PortalLayout>
   )
 }
 
