@@ -118,18 +118,7 @@ function RequireAdminLogin({ children }: RequireAdminLoginProps) {
     )
   }
 
-  return (
-    <>
-      <SiteNav />
-      <div className="tutor-dashboard-header" style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 24px 0' }}>
-        <div />
-        <button className="btn-secondary" onClick={handleSignOut}>
-          Sign out
-        </button>
-      </div>
-      {children}
-    </>
-  )
+  return <>{children}</>
 }
 
 export default RequireAdminLogin
