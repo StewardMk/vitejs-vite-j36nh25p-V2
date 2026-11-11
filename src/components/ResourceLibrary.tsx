@@ -34,6 +34,25 @@ function categoryLabel(key: string) {
   return CATEGORIES.find((c) => c.key === key)?.label.replace(/s$/, '') ?? 'Other'
 }
 
+/** Guess title, category and exam from a file name such as FNE7_Writing_Tutor_Guide.pdf. */
+export function describeFile(name: string) {
+  const base = name.replace(/\.[^.]+$/, '')
+  const lower = base.toLowerCase()
+  const exam = lower.match(/fne\s*_?(\d+)/)?.[1]
+  let category = 'other'
+  if (/tutor[_ -]?guide/.test(lower)) category = 'tutor_guide'
+  else if (/answer[_ -]?key/.test(lower)) category = 'answer_key'
+  else if (/script|recording/.test(lower)) category = 'audio_script'
+  else if (/case[_ -]?notes|reading_[abc]|texts?/.test(lower)) category = 'printable_test'
+  const words = base.replace(/^fne\s*_?\d+[_ -]*/i, '').replace(/[_-]+/g, ' ').trim()
+  const nice = words.charAt(0).toUpperCase() + words.slice(1)
+  return {
+    category,
+    examLabel: exam ? `Full Exam ${exam}` : '',
+    title: exam ? `Exam ${exam} – ${nice}` : nice || base,
+  }
+}
+
 interface Props {
   userId: string
   canDelete: boolean
@@ -50,7 +69,7 @@ function ResourceLibrary({ userId, canDelete }: Props) {
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('tutor_guide')
   const [examLabel, setExamLabel] = useState('')
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [showUpload, setShowUpload] = useState(false)
@@ -98,34 +117,45 @@ function ResourceLibrary({ userId, canDelete }: Props) {
     setRows((prev) => prev.filter((x) => x.id !== r.id))
   }
 
+  async function uploadOne(f: File, meta: { title: string; category: string; examLabel: string }) {
+    const safe = f.name.replace(/[^A-Za-z0-9._-]+/g, '_')
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${safe}`
+    const up = await supabase.storage.from(BUCKET).upload(path, f, { contentType: f.type || undefined })
+    if (up.error) return up.error.message
+    const { error: err } = await supabase.from('tutor_resources').insert({
+      title: meta.title,
+      category: meta.category,
+      exam_label: meta.examLabel || null,
+      file_path: path,
+      file_name: f.name,
+      file_size: f.size,
+      mime_type: f.type || null,
+      uploaded_by: userId,
+    })
+    if (err) {
+      await supabase.storage.from(BUCKET).remove([path])
+      return err.message
+    }
+    return ''
+  }
+
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault()
     setUploadError('')
-    if (!file) { setUploadError('Choose a file first.'); return }
-    if (!title.trim()) { setUploadError('Give the document a title.'); return }
+    if (files.length === 0) { setUploadError('Choose at least one file.'); return }
+    const bulk = files.length > 1
+    if (!bulk && !title.trim()) { setUploadError('Give the document a title.'); return }
     setUploading(true)
-    const safe = file.name.replace(/[^A-Za-z0-9._-]+/g, '_')
-    const path = `${Date.now()}-${safe}`
-    const up = await supabase.storage.from(BUCKET).upload(path, file, { contentType: file.type || undefined })
-    if (up.error) { setUploading(false); setUploadError(up.error.message); return }
-    const { error: err } = await supabase.from('tutor_resources').insert({
-      title: title.trim(),
-      category,
-      exam_label: examLabel.trim() || null,
-      file_path: path,
-      file_name: file.name,
-      file_size: file.size,
-      mime_type: file.type || null,
-      uploaded_by: userId,
-    })
-    setUploading(false)
-    if (err) {
-      await supabase.storage.from(BUCKET).remove([path])
-      setUploadError(err.message)
-      return
+    const failures: string[] = []
+    for (const f of files) {
+      const meta = bulk ? describeFile(f.name) : { title: title.trim(), category, examLabel: examLabel.trim() }
+      const msg = await uploadOne(f, meta)
+      if (msg) failures.push(`${f.name}: ${msg}`)
     }
-    setTitle(''); setExamLabel(''); setFile(null); setShowUpload(false)
-    setFileKey((k) => k + 1)
+    setUploading(false)
+    if (failures.length) setUploadError(failures.join(' | '))
+    else setShowUpload(false)
+    setTitle(''); setExamLabel(''); setFiles([]); setFileKey((k) => k + 1)
     load()
   }
 
@@ -141,23 +171,27 @@ function ResourceLibrary({ userId, canDelete }: Props) {
       {showUpload && (
         <form className="panel" onSubmit={handleUpload}>
           <h2>Upload a document</h2>
-          <p className="panel-sub">PDF, Word or audio files up to 50 MB. Only tutors and admins can see these.</p>
+          <p className="panel-sub">PDF, Word or audio files up to 50 MB. Choose several files at once and the title, category and exam are filled in from each file name (for example FNE7_Writing_Tutor_Guide.pdf). Only tutors and admins can see these.</p>
           <div className="upload-form">
-            <label>Title
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Exam 8 Writing tutor guide" />
+            <label>File(s)
+              <input key={fileKey} type="file" multiple onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
             </label>
-            <label>Category
-              <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label.replace(/s$/, '')}</option>)}
-              </select>
-            </label>
-            <label>Exam (optional)
-              <input value={examLabel} onChange={(e) => setExamLabel(e.target.value)} placeholder="e.g. Full Exam 8" />
-            </label>
-            <label>File
-              <input key={fileKey} type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-            </label>
-            <button className="btn-primary" type="submit" disabled={uploading}>{uploading ? 'Uploading…' : 'Upload'}</button>
+            {files.length <= 1 && (
+              <>
+                <label>Title
+                  <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Exam 8 Writing tutor guide" />
+                </label>
+                <label>Category
+                  <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                    {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label.replace(/s$/, '')}</option>)}
+                  </select>
+                </label>
+                <label>Exam (optional)
+                  <input value={examLabel} onChange={(e) => setExamLabel(e.target.value)} placeholder="e.g. Full Exam 8" />
+                </label>
+              </>
+            )}
+            <button className="btn-primary" type="submit" disabled={uploading}>{uploading ? 'Uploading…' : files.length > 1 ? `Upload ${files.length} files` : 'Upload'}</button>
           </div>
           {uploadError && <p className="tutor-error">{uploadError}</p>}
         </form>
