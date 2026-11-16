@@ -14,21 +14,15 @@
 // Supabase Edge Functions runtime -- no need to set those.)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { CORS_HEADERS, jsonResponse, requireStaff } from '../_shared/auth.ts'
+import { fetchCaseNotesBase64, findWritingStage } from '../_shared/writing.ts'
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-// Claude model used for grading. claude-sonnet-5 is a good cost/quality
-// default for this; swap to claude-haiku-4-5-20251001 to cut cost further,
-// or claude-opus-5-5 if you want the strongest possible assessment.
-const MODEL = 'claude-sonnet-5'
-
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
+// Claude model used for grading: Claude Sonnet 5.5 (API id claude-sonnet-5-5).
+const MODEL = 'claude-sonnet-5-5'
 
 // Internal rubric used to produce the raw_score fed into
 // writingScaledScore() in src/lib/oetGrading.ts (expects a raw score out of
@@ -46,48 +40,11 @@ const RUBRIC = [
 
 const MAX_RAW = RUBRIC.reduce((sum, c) => sum + c.max, 0) // 38
 
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS_HEADERS, 'content-type': 'application/json' },
-  })
-}
-
-function findWritingStage(manifest: any) {
-  const stages = manifest?.exam?.stages ?? []
-  const writingStage = stages.find((s: any) => s.presentation === 'writing')
-  const question = writingStage?.questions?.[0]
-  // The case notes document can be on the `writing` stage itself, or only
-  // on the preceding `writing_reading` stage -- ManifestExamRunner checks
-  // both, so this does too.
-  const caseNotesDoc =
-    writingStage?.documents?.[0] ?? stages.find((s: any) => s.id === 'writing_reading')?.documents?.[0]
-  return { question, caseNotesDoc }
-}
-
-async function fetchCaseNotesBase64(
-  admin: ReturnType<typeof createClient>,
-  testId: string,
-  fileRef: string | undefined
-): Promise<string | null> {
-  if (!fileRef) return null
-  const path = `${testId}/${fileRef}`
-  const { data, error } = await admin.storage.from('exam-documents').download(path)
-  if (error || !data) {
-    console.error('Could not download case notes PDF:', error)
-    return null
-  }
-  const bytes = new Uint8Array(await data.arrayBuffer())
-  let binary = ''
-  const chunkSize = 0x8000
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
-  }
-  return btoa(binary)
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS })
+
+  const denied = await requireStaff(req)
+  if (denied) return denied
 
   if (!ANTHROPIC_API_KEY) {
     return jsonResponse({ error: 'ANTHROPIC_API_KEY secret is not set for this function.' }, 500)

@@ -113,3 +113,29 @@
 .trend-chart { width: 100%; height: auto; display: block; }
 .legend { display: flex; gap: 16px; font-size: 12px; color: var(--color-ink-muted); margin-top: 6px; flex-wrap: wrap; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+
+/* Feedback report dialog */
+.report-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 42, 74, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+.report-modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px 28px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 20px 50px rgba(15, 42, 74, 0.25);
+}
+.report-modal h3 { margin: 0 0 2px; font-size: 20px; color: #0f2a4a; }
+.report-modal-sub { margin: 0 0 14px; color: #64748b; font-size: 14px; }
+.report-modal-help { margin: 10px 0; color: #475569; font-size: 13px; line-height: 1.45; }
+.report-modal-options { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.report-modal-options label { display: flex; align-items: center; gap: 10px; font-size: 15px; color: #122033; }
+.report-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }

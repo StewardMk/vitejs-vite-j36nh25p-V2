@@ -1,10 +1,11 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import SiteNav from './SiteNav'
 import PortalLayout, { StatCard, type NavGroup } from './PortalLayout'
 import ResourceLibrary from './ResourceLibrary'
 import { formatListeningReading, formatWriting } from '../lib/oetGrading'
 import { answersEqual } from '../lib/answerMatch'
+import { downloadFeedbackReport, type ReportSection, type WritingNotes } from '../lib/feedbackReport'
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
@@ -394,6 +395,16 @@ function TutorDashboard() {
   const [loadingResults, setLoadingResults] = useState(false)
 
   const [gradingSessionId, setGradingSessionId] = useState<string | null>(null)
+  // Feedback report dialog
+  const [reportSession, setReportSession] = useState<SessionSummary | null>(null)
+  const [reportSections, setReportSections] = useState<Record<ReportSection, boolean>>({
+    listening: true,
+    reading: true,
+    writing: true,
+  })
+  const [reportBusy, setReportBusy] = useState(false)
+  const [reportError, setReportError] = useState('')
+  const writingNotesCache = useRef<Map<string, WritingNotes>>(new Map())
   const [gradeErrors, setGradeErrors] = useState<Record<string, string>>({})
 
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
@@ -658,6 +669,61 @@ function TutorDashboard() {
 
     cancelEdit()
     loadResults()
+  }
+
+  function openReportDialog(s: SessionSummary) {
+    setReportError('')
+    setReportSections({ listening: !!s.listening, reading: !!s.reading, writing: !!s.writing })
+    setReportSession(s)
+  }
+
+  async function handleDownloadReport() {
+    const s = reportSession
+    if (!s) return
+    const sections = (['listening', 'reading', 'writing'] as ReportSection[]).filter(
+      (k) => reportSections[k] && !!s[k]
+    )
+    if (!sections.length) {
+      setReportError('Choose at least one section.')
+      return
+    }
+    setReportBusy(true)
+    setReportError('')
+    try {
+      let writingNotes: WritingNotes | null = null
+      if (sections.includes('writing')) {
+        if (!s.attemptId) throw new Error('No attempt id found for this session.')
+        const cacheKey = `${s.attemptId}:${s.writing?.raw ?? ''}`
+        writingNotes = writingNotesCache.current.get(cacheKey) ?? null
+        if (!writingNotes) {
+          const { data, error } = await supabase.functions.invoke('writing-feedback', {
+            body: { attemptId: s.attemptId },
+          })
+          if ((data as any)?.error || error || !(data as any)?.feedback) {
+            throw new Error((data as any)?.error ?? error?.message ?? 'Writing feedback failed.')
+          }
+          writingNotes = (data as any).feedback as WritingNotes
+          writingNotesCache.current.set(cacheKey, writingNotes)
+        }
+      }
+      downloadFeedbackReport({
+        studentName: s.studentName,
+        testTitle: s.testTitle,
+        sections,
+        manifest: s.manifest,
+        answers: s.answers,
+        listening: s.listening,
+        reading: s.reading,
+        writing: s.writing,
+        writingMarks: s.writingFeedback,
+        writingNotes,
+      })
+      setReportSession(null)
+    } catch (err) {
+      setReportError((err as Error).message)
+    } finally {
+      setReportBusy(false)
+    }
   }
 
   async function handleGradeWithAI(s: SessionSummary) {
@@ -1133,6 +1199,9 @@ function TutorDashboard() {
                                   <button className="btn-secondary" onClick={() => openPrintableResult(s)}>
                                     Print / download
                                   </button>
+                                  <button className="btn-primary" onClick={() => openReportDialog(s)}>
+                                    Feedback report
+                                  </button>
                                 </>
                               )}
                             </td>
@@ -1153,6 +1222,47 @@ function TutorDashboard() {
             )}
           </div>
         )}
+      {reportSession && (
+        <div className="report-modal-backdrop" onClick={() => !reportBusy && setReportSession(null)}>
+          <div className="report-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <h3>Feedback report</h3>
+            <p className="report-modal-sub">
+              {reportSession.studentName} &middot; {reportSession.testTitle}
+            </p>
+            <p className="report-modal-help">Choose the sections to include in the PDF.</p>
+            <div className="report-modal-options">
+              {(['listening', 'reading', 'writing'] as ReportSection[])
+                .filter((k) => !!reportSession[k])
+                .map((k) => (
+                  <label key={k}>
+                    <input
+                      type="checkbox"
+                      checked={reportSections[k]}
+                      onChange={(e) => setReportSections({ ...reportSections, [k]: e.target.checked })}
+                      disabled={reportBusy}
+                    />
+                    {k.charAt(0).toUpperCase() + k.slice(1)}
+                  </label>
+                ))}
+            </div>
+            {reportSections.writing && reportSession.writing && (
+              <p className="report-modal-help">
+                Writing feedback is drafted by AI (Claude Sonnet 5.5) and takes a few seconds. It uses a small amount of
+                API credit. The Writing mark itself is not changed.
+              </p>
+            )}
+            {reportError && <p className="tutor-error">{reportError}</p>}
+            <div className="report-modal-actions">
+              <button className="btn-secondary" onClick={() => setReportSession(null)} disabled={reportBusy}>
+                Cancel
+              </button>
+              <button className="btn-primary" onClick={handleDownloadReport} disabled={reportBusy}>
+                {reportBusy ? 'Preparing…' : 'Download PDF'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PortalLayout>
   )
 }
