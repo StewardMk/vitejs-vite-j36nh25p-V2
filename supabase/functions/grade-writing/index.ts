@@ -24,18 +24,16 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 // Claude model used for grading: Claude Sonnet 5.5 (API id claude-sonnet-5-5).
 const MODEL = 'claude-sonnet-5-5'
 
-// Internal rubric used to produce the raw_score fed into
-// writingScaledScore() in src/lib/oetGrading.ts (expects a raw score out of
-// WRITING_MAX_RAW = 38). Adjust the weights here if you have an official
-// marking-criteria document you want to match more closely -- the only
-// hard constraint is that the maxes must sum to WRITING_MAX_RAW.
+// OET Writing criteria for the Nursing sub-test: Purpose is marked out of 3
+// and the other five criteria out of 7, giving the 38-point raw score that
+// writingScaledScore() in src/lib/oetGrading.ts converts to the 0-500 scale.
 const RUBRIC = [
-  { key: 'content', name: 'Content', max: 6 },
-  { key: 'conciseness_clarity', name: 'Conciseness and Clarity', max: 6 },
-  { key: 'genre_style', name: 'Genre and Style', max: 6 },
-  { key: 'organisation_layout', name: 'Organisation and Layout', max: 6 },
-  { key: 'grammar_cohesion', name: 'Grammar and Cohesion', max: 8 },
-  { key: 'spelling_punctuation', name: 'Spelling and Punctuation', max: 6 },
+  { key: 'purpose', name: 'Purpose', max: 3, desc: 'the letter states clearly why it is written and what the reader is asked to do' },
+  { key: 'content', name: 'Content', max: 7, desc: 'relevant case-note information is included accurately; irrelevant detail is left out; nothing is invented' },
+  { key: 'conciseness_clarity', name: 'Conciseness and Clarity', max: 7, desc: 'information is brief and clear, with no repetition and no unnecessary detail' },
+  { key: 'genre_style', name: 'Genre and Style', max: 7, desc: 'professional register and tone suited to the reader; complete sentences, not note form' },
+  { key: 'organisation_layout', name: 'Organisation and Layout', max: 7, desc: 'logical order, paragraphs, and letter conventions (address, date, salutation, closing)' },
+  { key: 'language', name: 'Language', max: 7, desc: 'grammar, vocabulary, spelling and punctuation, and how well they support meaning' },
 ] as const
 
 const MAX_RAW = RUBRIC.reduce((sum, c) => sum + c.max, 0) // 38
@@ -81,7 +79,7 @@ Deno.serve(async (req) => {
 
     const caseNotesBase64 = await fetchCaseNotesBase64(admin, attempt.test_id, caseNotesDoc?.file_ref)
 
-    const rubricText = RUBRIC.map((c) => `- "${c.key}": ${c.name} (0-${c.max})`).join('\n')
+    const rubricText = RUBRIC.map((c) => `- "${c.key}": ${c.name} (0-${c.max}): ${c.desc}`).join('\n')
 
     const systemPrompt = `You are an experienced OET (Occupational English Test) Writing sub-test assessor for the Nursing profession. Assess the candidate's letter strictly against the attached case notes and the task instruction below. Be a fair, consistent, moderately strict examiner -- do not inflate scores, and do not give high marks to a letter that invents information not present in the case notes, uses note form, or ignores the stated word count.
 

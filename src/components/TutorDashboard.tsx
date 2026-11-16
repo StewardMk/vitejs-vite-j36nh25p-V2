@@ -671,9 +671,13 @@ function TutorDashboard() {
     loadResults()
   }
 
-  function openReportDialog(s: SessionSummary) {
+  function openReportDialog(s: SessionSummary, only?: ReportSection) {
     setReportError('')
-    setReportSections({ listening: !!s.listening, reading: !!s.reading, writing: !!s.writing })
+    setReportSections({
+      listening: !!s.listening && (!only || only === 'listening'),
+      reading: !!s.reading && (!only || only === 'reading'),
+      writing: !!s.writing && (!only || only === 'writing'),
+    })
     setReportSession(s)
   }
 
@@ -1168,6 +1172,9 @@ function TutorDashboard() {
                                       View AI feedback
                                     </button>
                                   )}
+                                  <button className="btn-secondary" onClick={() => openReportDialog(s, 'writing')}>
+                                    Feedback report
+                                  </button>
                                   <span className="tutor-writing-grade">{formatWriting(s.writing.raw)}</span>
                                   {gradeErrors[s.sessionGroupId] && (
                                     <span className="tutor-error">{gradeErrors[s.sessionGroupId]}</span>
