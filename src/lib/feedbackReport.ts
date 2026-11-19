@@ -57,6 +57,8 @@ export interface FeedbackReportInput {
   writing: ReportScore | null
   writingMarks: WritingMarks | null
   writingNotes: WritingNotes | null
+  /** Listening answers a tutor accepted as near misses (question id -> note). Shown as correct. */
+  listeningAccepted?: Record<string, string>
 }
 
 type RGB = [number, number, number]
@@ -105,7 +107,8 @@ function display(q: any, value: string | null | undefined): string {
 export function collectParts(
   manifest: any,
   answers: Record<string, string> | null,
-  subtest: 'listening' | 'reading'
+  subtest: 'listening' | 'reading',
+  accepted: Record<string, string> = {}
 ): PartData[] {
   const parts: PartData[] = []
   for (const stage of manifest?.exam?.stages ?? []) {
@@ -126,7 +129,7 @@ export function collectParts(
         text: (q.question ?? q.prompt ?? q.label ?? '').toString(),
         given: display(q, raw),
         key: display(q, q.correct_answer),
-        ok: !blank && answersEqual(raw as string, q.correct_answer, subtest),
+        ok: !blank && (answersEqual(raw as string, q.correct_answer, subtest) || !!accepted[q.id]),
         blank,
       }
     })
@@ -280,7 +283,7 @@ export function buildFeedbackReport(input: FeedbackReportInput): jsPDF {
   y += 6
 
   // ---- gather data
-  const lParts = include('listening') ? collectParts(input.manifest, input.answers, 'listening') : []
+  const lParts = include('listening') ? collectParts(input.manifest, input.answers, 'listening', input.listeningAccepted ?? {}) : []
   const rParts = include('reading') ? collectParts(input.manifest, input.answers, 'reading') : []
   const writingRaw = input.writing?.raw ?? null
 
