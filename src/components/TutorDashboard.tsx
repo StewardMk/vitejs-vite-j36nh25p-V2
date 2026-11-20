@@ -6,6 +6,15 @@ import ResourceLibrary from './ResourceLibrary'
 import { formatListeningReading, formatWriting } from '../lib/oetGrading'
 import { answersEqual } from '../lib/answerMatch'
 import { downloadFeedbackReport, type ReportSection, type WritingNotes } from '../lib/feedbackReport'
+import {
+  describeScore,
+  rawAfterReview,
+  readAccepted,
+  wrongGapFills,
+  type AcceptedMap,
+  type AiSuggestion,
+  type ReviewRow,
+} from '../lib/listeningReview'
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
@@ -44,6 +53,7 @@ interface SessionSummary {
   writingPrompt: string | null
   essayText: string | null
   writingFeedback: WritingFeedback | null
+  listeningAccepted: AcceptedMap
   manifest: any
   answers: Record<string, string> | null
 }
@@ -404,6 +414,15 @@ function TutorDashboard() {
   })
   const [reportBusy, setReportBusy] = useState(false)
   const [reportError, setReportError] = useState('')
+
+  // Listening review dialog
+  const [reviewSession, setReviewSession] = useState<SessionSummary | null>(null)
+  const [reviewRows, setReviewRows] = useState<ReviewRow[]>([])
+  const [reviewTicks, setReviewTicks] = useState<Record<string, boolean>>({})
+  const [reviewAi, setReviewAi] = useState<Record<string, AiSuggestion>>({})
+  const [reviewBusy, setReviewBusy] = useState(false)
+  const [reviewAiBusy, setReviewAiBusy] = useState(false)
+  const [reviewError, setReviewError] = useState('')
   const writingNotesCache = useRef<Map<string, WritingNotes>>(new Map())
   const [gradeErrors, setGradeErrors] = useState<Record<string, string>>({})
 
@@ -521,6 +540,7 @@ function TutorDashboard() {
         writingPrompt: writingQuestion?.prompt ?? null,
         essayText: writingQuestion ? attempt.answers?.[writingQuestion.id] ?? null : null,
         writingFeedback: null,
+        listeningAccepted: {},
         manifest: attempt.tests?.manifest ?? null,
         answers: attempt.answers ?? null,
       }
@@ -530,7 +550,10 @@ function TutorDashboard() {
       }
 
       const result: SubtestResult = { resultId: row.id, raw: row.raw_score, scorable: row.scorable_count }
-      if (row.subtest_type === 'listening') existing.listening = result
+      if (row.subtest_type === 'listening') {
+        existing.listening = result
+        existing.listeningAccepted = readAccepted(row.feedback)
+      }
       else if (row.subtest_type === 'reading') existing.reading = result
       else if (row.subtest_type === 'writing') {
         existing.writing = result
@@ -721,6 +744,7 @@ function TutorDashboard() {
         writing: s.writing,
         writingMarks: s.writingFeedback,
         writingNotes,
+        listeningAccepted: s.listeningAccepted,
       })
       setReportSession(null)
     } catch (err) {
@@ -728,6 +752,82 @@ function TutorDashboard() {
     } finally {
       setReportBusy(false)
     }
+  }
+
+  function openReviewDialog(s: SessionSummary) {
+    const rows = wrongGapFills(s.manifest, s.answers, s.listeningAccepted)
+    setReviewRows(rows)
+    setReviewTicks(Object.fromEntries(rows.map((r) => [r.id, r.accepted])))
+    setReviewAi({})
+    setReviewError('')
+    setReviewSession(s)
+  }
+
+  async function handleReviewAI() {
+    const todo = reviewRows.filter((r) => !r.accepted)
+    if (!todo.length) {
+      setReviewError('There are no answers to check.')
+      return
+    }
+    setReviewAiBusy(true)
+    setReviewError('')
+    try {
+      const { data, error } = await supabase.functions.invoke('review-listening', {
+        body: { items: todo.map((r) => ({ id: r.id, stem: r.stem, key: r.key, given: r.given })) },
+      })
+      if ((data as any)?.error || error || !Array.isArray((data as any)?.items)) {
+        throw new Error((data as any)?.error ?? error?.message ?? 'The AI check failed.')
+      }
+      const next: Record<string, AiSuggestion> = {}
+      for (const it of (data as any).items) next[it.id] = { verdict: it.verdict, reason: it.reason }
+      setReviewAi(next)
+    } catch (err) {
+      setReviewError((err as Error).message)
+    } finally {
+      setReviewAiBusy(false)
+    }
+  }
+
+  function tickSuggested() {
+    setReviewTicks((prev) => {
+      const next = { ...prev }
+      for (const [id, sug] of Object.entries(reviewAi)) if (sug.verdict === 'accept') next[id] = true
+      return next
+    })
+  }
+
+  async function handleSaveReview() {
+    const s = reviewSession
+    if (!s?.listening) return
+    setReviewBusy(true)
+    setReviewError('')
+    const now = new Date().toISOString()
+    const after: AcceptedMap = {}
+    for (const r of reviewRows) {
+      if (!reviewTicks[r.id]) continue
+      after[r.id] = s.listeningAccepted[r.id] ?? (reviewAi[r.id]?.verdict === 'accept' ? 'AI-suggested, tutor-accepted' : 'Tutor-accepted')
+    }
+    const raw = s.listening.raw ?? 0
+    const newRaw = rawAfterReview(raw, s.listening.scorable, s.listeningAccepted, after)
+    const { data, error } = await supabase
+      .from('results')
+      .update({
+        raw_score: newRaw,
+        feedback: { listening_review: { accepted: after, reviewed_at: now, reviewed_by: session?.user?.email ?? null } },
+      })
+      .eq('id', s.listening.resultId)
+      .select('id')
+    setReviewBusy(false)
+    if (error) {
+      setReviewError(error.message)
+      return
+    }
+    if (!data || data.length === 0) {
+      setReviewError('Nothing was saved. The database rejected the update (a missing UPDATE policy on "results").')
+      return
+    }
+    setReviewSession(null)
+    await loadResults()
   }
 
   async function handleGradeWithAI(s: SessionSummary) {
@@ -1117,7 +1217,19 @@ function TutorDashboard() {
                                   />
                                 </span>
                               ) : (
-                                formatListeningReading(s.listening?.raw ?? null, s.listening?.scorable ?? null)
+                                <>
+                                  {formatListeningReading(s.listening?.raw ?? null, s.listening?.scorable ?? null)}
+                                  {s.listening && (
+                                    <div style={{ marginTop: 6 }}>
+                                      <button className="btn-secondary" onClick={() => openReviewDialog(s)}>
+                                        Review answers
+                                        {Object.keys(s.listeningAccepted).length > 0
+                                          ? ` (${Object.keys(s.listeningAccepted).length} accepted)`
+                                          : ''}
+                                      </button>
+                                    </div>
+                                  )}
+                                </>
                               )}
                             </td>
                             <td>
@@ -1229,6 +1341,115 @@ function TutorDashboard() {
             )}
           </div>
         )}
+      {reviewSession && reviewSession.listening && (
+        <div className="report-modal-backdrop" onClick={() => !reviewBusy && !reviewAiBusy && setReviewSession(null)}>
+          <div
+            className="report-modal review-modal"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3>Review Listening answers</h3>
+            <p className="report-modal-sub">
+              {reviewSession.studentName} &middot; {reviewSession.testTitle}
+            </p>
+            {reviewRows.length === 0 ? (
+              <p className="report-modal-help">
+                There are no wrong gap-fill answers to review. Multiple-choice answers and blank answers are not
+                listed.
+              </p>
+            ) : (
+              <>
+                <p className="report-modal-help">
+                  These gap-fill answers were marked wrong because they do not exactly match the key. Tick any you want
+                  to accept as correct. &quot;Check with AI&quot; (Claude Sonnet 5.5) suggests which are near misses; it
+                  uses a small amount of API credit and never changes a mark.
+                </p>
+                <div className="review-table-wrap">
+                  <table className="review-table">
+                    <thead>
+                      <tr>
+                        <th></th>
+                        <th>Q</th>
+                        <th>Note</th>
+                        <th>Wrote</th>
+                        <th>Key</th>
+                        <th>AI suggestion</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reviewRows.map((r) => {
+                        const sug = reviewAi[r.id]
+                        return (
+                          <tr key={r.id}>
+                            <td>
+                              <input
+                                type="checkbox"
+                                checked={!!reviewTicks[r.id]}
+                                onChange={(e) => setReviewTicks({ ...reviewTicks, [r.id]: e.target.checked })}
+                                disabled={reviewBusy}
+                                aria-label={`Accept question ${r.n}`}
+                              />
+                            </td>
+                            <td>{r.n}</td>
+                            <td>{r.stem}</td>
+                            <td>{r.given}</td>
+                            <td>{r.key}</td>
+                            <td>
+                              {sug ? (
+                                <span className={`review-chip review-chip-${sug.verdict}`}>
+                                  {sug.verdict === 'accept' ? 'Accept' : sug.verdict === 'reject' ? 'Reject' : 'Unsure'}
+                                </span>
+                              ) : null}
+                              {sug ? <div className="review-reason">{sug.reason}</div> : null}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {(() => {
+                  const after: AcceptedMap = {}
+                  for (const r of reviewRows) if (reviewTicks[r.id]) after[r.id] = ''
+                  const before = reviewSession.listeningAccepted
+                  const cur = reviewSession.listening!.raw ?? 0
+                  const next = rawAfterReview(cur, reviewSession.listening!.scorable, before, after)
+                  return (
+                    <p className="report-modal-help">
+                      <strong>Listening mark:</strong> {describeScore(cur, reviewSession.listening!.scorable)}
+                      {next !== cur ? <> &rarr; <strong>{describeScore(next, reviewSession.listening!.scorable)}</strong></> : null}
+                    </p>
+                  )
+                })()}
+              </>
+            )}
+            {reviewError && <p className="tutor-error">{reviewError}</p>}
+            <div className="report-modal-actions">
+              <button className="btn-secondary" onClick={() => setReviewSession(null)} disabled={reviewBusy || reviewAiBusy}>
+                Close
+              </button>
+              {reviewRows.length > 0 && (
+                <>
+                  <button className="btn-secondary" onClick={handleReviewAI} disabled={reviewBusy || reviewAiBusy}>
+                    {reviewAiBusy ? 'Checking…' : 'Check with AI'}
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    onClick={tickSuggested}
+                    disabled={reviewBusy || reviewAiBusy || !Object.values(reviewAi).some((x) => x.verdict === 'accept')}
+                  >
+                    Tick suggested
+                  </button>
+                  <button className="btn-primary" onClick={handleSaveReview} disabled={reviewBusy || reviewAiBusy}>
+                    {reviewBusy ? 'Saving…' : 'Save'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {reportSession && (
         <div className="report-modal-backdrop" onClick={() => !reportBusy && setReportSession(null)}>
           <div className="report-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
