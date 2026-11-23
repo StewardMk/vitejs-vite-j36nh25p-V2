@@ -20,7 +20,7 @@ function formatPrice(kwacha: number) {
   return `K${kwacha.toLocaleString()}`
 }
 
-function ExamCatalog() {
+function ExamCatalog({ embedded = false }: { embedded?: boolean }) {
   const { session, profile, loading: authLoading } = useAuthSession()
   const navigate = useNavigate()
 
@@ -34,7 +34,7 @@ function ExamCatalog() {
   useEffect(() => {
     if (authLoading) return
     if (!session) {
-      navigate('/login?next=/exams', { replace: true })
+      navigate('/login?next=/account', { replace: true })
       return
     }
     loadCatalog()
@@ -107,14 +107,16 @@ function ExamCatalog() {
 
   return (
     <>
-      <SiteNav />
-      <div className="tutor-dashboard-page">
-        <div className="tutor-dashboard-header">
-          <div>
-            <span className="eyebrow">Exam catalog</span>
-            <h1>Choose a practice exam</h1>
+      {!embedded && <SiteNav />}
+      <div className={embedded ? undefined : 'tutor-dashboard-page'}>
+        {!embedded && (
+          <div className="tutor-dashboard-header">
+            <div>
+              <span className="eyebrow">Exam catalog</span>
+              <h1>Choose a practice exam</h1>
+            </div>
           </div>
-        </div>
+        )}
 
         {actionError && (
           <p className="student-entry-error" style={{ marginBottom: 16 }}>

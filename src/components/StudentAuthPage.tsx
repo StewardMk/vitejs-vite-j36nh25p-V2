@@ -26,7 +26,7 @@ function StudentAuthPage() {
   const [awaitingApproval, setAwaitingApproval] = useState(false)
 
   const navigate = useNavigate()
-  const next = searchParams.get('next') || '/exams'
+  const next = searchParams.get('next') || '/account'
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
