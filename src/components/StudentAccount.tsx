@@ -7,6 +7,8 @@ import {
   areaByPart, areaByType, levelClass, TIPS, writingCriteriaAverages,
   type AreaScore, type QuestionStat, type TrendPoint,
 } from '../lib/studentAnalytics'
+import ScoreChart, { BandExplanations } from './ScoreChart'
+import { summariseScores } from '../lib/scoreChart'
 import PortalLayout, { StatCard, type NavGroup } from './PortalLayout'
 
 interface PurchaseRow {
@@ -140,6 +142,8 @@ function StudentAccount() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, session])
 
+  const scoreSummaryData = useMemo(() => summariseScores(attempts), [attempts])
+
   const analytics = useMemo(() => {
     const chrono = [...attempts].reverse()
     const trend: TrendPoint[] = chrono.map((a) => ({
@@ -239,9 +243,21 @@ function StudentAccount() {
             </div>
 
             <div className="panel">
+              <h2>Your OET scores</h2>
+              <p className="panel-sub">Latest and highest result in each subtest, on the 0–500 scale</p>
+              <ScoreChart summary={scoreSummaryData} />
+            </div>
+
+            <div className="panel">
               <h2>Score trend</h2>
               <p className="panel-sub">Percentage of questions correct in each exam, oldest to newest</p>
               <TrendChart points={analytics.trend} />
+            </div>
+
+            <div className="panel">
+              <h2>What the grades mean</h2>
+              <p className="panel-sub">OET grade bands with approximate IELTS equivalents</p>
+              <BandExplanations />
             </div>
 
             {stats.length > 0 && (
