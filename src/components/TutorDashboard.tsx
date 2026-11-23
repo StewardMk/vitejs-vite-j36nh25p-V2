@@ -32,7 +32,15 @@ interface StudentRow {
   full_name: string | null
   is_approved: boolean
   created_at: string
-  attempts: { test_id: string; test_title: string; status: string; started_at: string; submitted_at: string | null }[]
+  attempts: { id: string; test_id: string; test_title: string; status: string; started_at: string; submitted_at: string | null }[]
+}
+
+interface UnlinkedAttempt {
+  id: string
+  test_title: string
+  student_name: string | null
+  submitted_at: string
+  scores: { subtest: string; raw: number | null; scorable: number | null }[]
 }
 
 interface SubtestResult {
@@ -390,6 +398,47 @@ function TutorDashboard() {
   const [studentsError, setStudentsError] = useState('')
   const [studentSearch, setStudentSearch] = useState('')
   const [openStudentId, setOpenStudentId] = useState<string | null>(null)
+  const [addingFor, setAddingFor] = useState<string | null>(null)
+  const [unlinked, setUnlinked] = useState<UnlinkedAttempt[]>([])
+  const [unlinkedSearch, setUnlinkedSearch] = useState('')
+  const [assignBusy, setAssignBusy] = useState(false)
+
+  function loadStudents() {
+    supabase.rpc('tutor_list_students').then(({ data }) => setStudents((data as StudentRow[]) ?? []))
+  }
+
+  async function openAddExam(studentId: string, studentName: string) {
+    setAddingFor(studentId)
+    setUnlinkedSearch(studentName)
+    setStudentsError('')
+    const { data, error } = await supabase.rpc('tutor_list_unlinked_attempts')
+    if (error) setStudentsError(error.message)
+    else setUnlinked((data as UnlinkedAttempt[]) ?? [])
+  }
+
+  async function assignAttempt(attemptId: string, studentId: string) {
+    setAssignBusy(true)
+    setStudentsError('')
+    const { error } = await supabase.rpc('tutor_assign_attempt', { p_attempt_id: attemptId, p_student_id: studentId })
+    setAssignBusy(false)
+    if (error) {
+      setStudentsError(error.message)
+      return
+    }
+    setUnlinked((u) => u.filter((x) => x.id !== attemptId))
+    loadStudents()
+  }
+
+  async function unassignAttempt(attemptId: string) {
+    if (!window.confirm('Remove this exam from the student? The attempt and its marks are kept and can be added again.')) return
+    const { error } = await supabase.rpc('tutor_unassign_attempt', { p_attempt_id: attemptId })
+    if (error) setStudentsError(error.message)
+    else loadStudents()
+  }
+
+  function scoreText(sc: UnlinkedAttempt['scores']) {
+    return sc.length ? sc.map((x) => `${x.subtest[0].toUpperCase()}${x.subtest.slice(1)} ${x.raw ?? '—'}${x.scorable ? `/${x.scorable}` : ''}`).join(' · ') : 'No scores'
+  }
   const [selectedTestId, setSelectedTestId] = useState('')
   const [validHours, setValidHours] = useState(3)
   const [maxUses, setMaxUses] = useState(20)
@@ -1142,10 +1191,52 @@ function TutorDashboard() {
                                           {a.submitted_at
                                             ? `completed ${new Date(a.submitted_at).toLocaleDateString()}`
                                             : `started ${new Date(a.started_at).toLocaleDateString()}, not finished`}
+                                          {a.submitted_at && (
+                                            <button className="btn-secondary" style={{ marginLeft: 10, padding: '2px 8px', fontSize: 12 }} onClick={() => unassignAttempt(a.id)}>
+                                              Remove
+                                            </button>
+                                          )}
                                         </li>
                                       ))}
                                     </ul>
                                   )}
+                                  <div style={{ marginTop: 10 }}>
+                                    {addingFor === st.id ? (
+                                      <div>
+                                        <strong>Add a completed exam to {st.full_name || st.email}</strong>
+                                        <p className="tutor-panel-note">Finished attempts not yet linked to any student account (for example, taken with an access code). Adding one puts its marks in this student's results and score chart.</p>
+                                        <div className="tutor-field">
+                                          <input type="search" placeholder="Search by name or exam" value={unlinkedSearch} onChange={(e) => setUnlinkedSearch(e.target.value)} />
+                                        </div>
+                                        <div className="tutor-table-wrap">
+                                          <table className="tutor-table">
+                                            <thead><tr><th>Name entered</th><th>Exam</th><th>Scores</th><th>Date</th><th></th></tr></thead>
+                                            <tbody>
+                                              {unlinked
+                                                .filter((u) => {
+                                                  const q = unlinkedSearch.trim().toLowerCase()
+                                                  return !q || `${u.student_name ?? ''} ${u.test_title}`.toLowerCase().includes(q)
+                                                })
+                                                .slice(0, 50)
+                                                .map((u) => (
+                                                  <tr key={u.id}>
+                                                    <td>{u.student_name || '—'}</td>
+                                                    <td>{u.test_title}</td>
+                                                    <td>{scoreText(u.scores)}</td>
+                                                    <td>{new Date(u.submitted_at).toLocaleDateString()}</td>
+                                                    <td><button className="btn-primary" disabled={assignBusy} onClick={() => assignAttempt(u.id, st.id)}>Add</button></td>
+                                                  </tr>
+                                                ))}
+                                              {unlinked.length === 0 && <tr><td colSpan={5}>No unlinked completed exams.</td></tr>}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                        <button className="btn-secondary" onClick={() => setAddingFor(null)}>Done</button>
+                                      </div>
+                                    ) : (
+                                      <button className="btn-secondary" onClick={() => openAddExam(st.id, st.full_name || '')}>Add completed exam</button>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             )}
