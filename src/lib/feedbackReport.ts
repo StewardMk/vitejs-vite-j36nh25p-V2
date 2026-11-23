@@ -346,6 +346,66 @@ export function buildFeedbackReport(input: FeedbackReportInput): jsPDF {
     true
   )
 
+  // ---- OET-style results chart (Full exams only: two or more sections in one report)
+  if (input.sections.length > 1) {
+    const chartCols: { label: string; scaled: number | null }[] = []
+    if (include('listening'))
+      chartCols.push({ label: 'Listening', scaled: input.listening && input.listening.raw !== null && input.listening.scorable === 42 ? listeningReadingScaledScore(input.listening.raw) : null })
+    if (include('reading'))
+      chartCols.push({ label: 'Reading', scaled: input.reading && input.reading.raw !== null && input.reading.scorable === 42 ? listeningReadingScaledScore(input.reading.raw) : null })
+    if (include('writing'))
+      chartCols.push({ label: 'Writing', scaled: writingRaw === null ? null : writingScaledScore(writingRaw) })
+
+    h2('Results chart')
+    const chartH = 66
+    ensure(chartH + 10)
+    const top = y + 4
+    const plotL = MARGIN_X + 12
+    const plotR = MARGIN_X + CONTENT_W - 14
+    const plotT = top + 2
+    const plotB = top + chartH - 8
+    const yy = (v: number) => plotT + (1 - v / 500) * (plotB - plotT)
+    const bands: [string, number, number][] = [['A', 450, 500], ['B', 350, 450], ['C+', 300, 350], ['C', 200, 300], ['D', 100, 200], ['E', 0, 100]]
+    doc.setLineWidth(0.15)
+    doc.setFontSize(7.5)
+    for (const v of [0, 100, 200, 300, 350, 450, 500]) {
+      doc.setDrawColor(...GRID)
+      if (v === 0 || v === 500) doc.setLineDashPattern([], 0)
+      else doc.setLineDashPattern([1, 1], 0)
+      doc.line(plotL, yy(v), plotR, yy(v))
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(...GREY)
+      doc.text(String(v), plotL - 2, yy(v) + 1, { align: 'right' })
+    }
+    doc.setLineDashPattern([], 0)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    doc.setTextColor(...INK)
+    for (const [g, a, b] of bands) doc.text(g, plotR + 3, (yy(a) + yy(b)) / 2 + 1)
+    const colW = (plotR - plotL) / chartCols.length
+    chartCols.forEach((c, i) => {
+      const mid = plotL + colW * i + colW / 2
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(...INK)
+      doc.text(c.label, mid, plotB + 5, { align: 'center' })
+      if (c.scaled === null) {
+        doc.setFont('helvetica', 'italic')
+        doc.setFontSize(7.5)
+        doc.setTextColor(...GREY)
+        doc.text('Not marked', mid, plotB - 2, { align: 'center' })
+        return
+      }
+      doc.setFillColor(...NAVY)
+      doc.rect(mid - 9, yy(c.scaled), 18, Math.max(0.5, yy(0) - yy(c.scaled)), 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(...INK)
+      doc.text(String(c.scaled), mid, yy(c.scaled) - 1.5, { align: 'center' })
+    })
+    y = top + chartH
+  }
+
   // ---- scores by part
   const partRows: string[][] = []
   for (const p of [...lParts, ...rParts]) {
