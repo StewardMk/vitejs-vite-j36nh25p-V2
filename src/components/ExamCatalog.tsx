@@ -20,12 +20,25 @@ function formatPrice(kwacha: number) {
   return `K${kwacha.toLocaleString()}`
 }
 
+function accessNote(a?: { limited: boolean; attempts_used: number; max_attempts: number; expires_at: string; active: boolean }) {
+  if (!a || !a.limited) return null
+  const until = new Date(a.expires_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+  const text = a.active
+    ? `${a.attempts_used} of ${a.max_attempts} attempts used · open until ${until}`
+    : a.attempts_used >= a.max_attempts
+      ? `All ${a.max_attempts} attempts used`
+      : `Access ended ${until}`
+  return <div style={{ fontSize: 12, color: a.active ? 'var(--color-ink-muted)' : '#b3261e', marginTop: 2 }}>{text}</div>
+}
+
 function ExamCatalog({ embedded = false }: { embedded?: boolean }) {
   const { session, profile, loading: authLoading } = useAuthSession()
   const navigate = useNavigate()
 
   const [tests, setTests] = useState<CatalogTest[]>([])
   const [owned, setOwned] = useState<Set<string>>(new Set())
+  // Paid exams are limited (attempts and days). Keyed by test id.
+  const [access, setAccess] = useState<Record<string, { limited: boolean; attempts_used: number; max_attempts: number; expires_at: string; active: boolean }>>({})
   const [loading, setLoading] = useState(true)
   const [pendingBuy, setPendingBuy] = useState<CatalogTest | null>(null)
   const [busyTestId, setBusyTestId] = useState<string | null>(null)
@@ -44,12 +57,9 @@ function ExamCatalog({ embedded = false }: { embedded?: boolean }) {
   async function loadCatalog() {
     setLoading(true)
 
-    const [{ data: catalogData, error: catalogError }, { data: purchaseData }] = await Promise.all([
+    const [{ data: catalogData, error: catalogError }, { data: accessData }] = await Promise.all([
       supabase.from('exam_catalog').select('*').order('created_at', { ascending: false }),
-      supabase
-        .from('purchases')
-        .select('test_id, status')
-        .in('status', ['paid', 'fake_paid']),
+      supabase.rpc('my_exam_access'),
     ])
 
     setLoading(false)
@@ -60,7 +70,10 @@ function ExamCatalog({ embedded = false }: { embedded?: boolean }) {
     }
 
     setTests((catalogData as CatalogTest[]) ?? [])
-    setOwned(new Set((purchaseData ?? []).map((p: any) => p.test_id)))
+    const byTest: Record<string, any> = {}
+    for (const a of (accessData ?? []) as any[]) byTest[a.test_id] = a
+    setAccess(byTest)
+    setOwned(new Set(Object.values(byTest).filter((a: any) => a.active).map((a: any) => a.test_id)))
   }
 
   async function startExam(testId: string) {
@@ -218,7 +231,10 @@ function ExamCatalog({ embedded = false }: { embedded?: boolean }) {
                   </div>
 
                   <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <strong>{formatPrice(test.price_kwacha)}</strong>
+                    <div>
+                      <strong>{formatPrice(test.price_kwacha)}</strong>
+                      {accessNote(access[test.id])}
+                    </div>
 
                     {isOwned ? (
                       <button className="btn-primary" disabled={isBusy} onClick={() => startExam(test.id)}>

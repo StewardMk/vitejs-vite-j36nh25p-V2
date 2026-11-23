@@ -137,9 +137,14 @@ Deno.serve(async (req: Request) => {
       if (!test || !test.is_published) return json({ error: 'That exam is not available.' }, 404)
       if (test.price_kwacha <= 0) return json({ error: 'That exam is free.' }, 400)
 
-      const { data: owned } = await admin.from('purchases').select('id').eq('user_id', user.id).eq('test_id', test.id)
-        .in('status', ['paid', 'fake_paid']).maybeSingle()
-      if (owned) return json({ alreadyOwned: true })
+      // Paid access is limited (see exam_access_rules). Still-valid access means nothing to buy;
+      // ended access is closed off here so the student can buy the exam again.
+      const { data: access } = await admin.rpc('exam_access_for', { p_user: user.id, p_test: test.id })
+      const current = Array.isArray(access) ? access[0] : access
+      if (current?.purchase_id) {
+        if (current.active) return json({ alreadyOwned: true })
+        await admin.from('purchases').update({ status: 'expired' }).eq('id', current.purchase_id)
+      }
 
       const reference = `yo-${crypto.randomUUID()}`
       const { error } = await admin.from('purchases').insert({
