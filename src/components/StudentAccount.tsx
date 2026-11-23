@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthSession, signOutStudent } from '../lib/studentAuth'
 import { formatListeningReading, formatWriting, gradeForScaledScore, listeningReadingScaledScore } from '../lib/oetGrading'
@@ -9,6 +9,7 @@ import {
 } from '../lib/studentAnalytics'
 import ScoreChart, { BandExplanations } from './ScoreChart'
 import { summariseScores } from '../lib/scoreChart'
+import ExamCatalog from './ExamCatalog'
 import PortalLayout, { StatCard, type NavGroup } from './PortalLayout'
 
 interface PurchaseRow {
@@ -35,7 +36,7 @@ interface AttemptRow {
   results: AttemptResultRow[]
 }
 
-type View = 'dashboard' | 'results' | 'purchases'
+type View = 'dashboard' | 'results' | 'purchases' | 'exams'
 
 function scoreSummary(results: AttemptResultRow[]) {
   const listening = results.find((r) => r.subtest_type === 'listening')
@@ -110,7 +111,8 @@ function Bars({ items }: { items: AreaScore[] }) {
 function StudentAccount() {
   const { session, profile, loading: authLoading } = useAuthSession()
   const navigate = useNavigate()
-  const [view, setView] = useState<View>('dashboard')
+  const [searchParams] = useSearchParams()
+  const [view, setView] = useState<View>(searchParams.get('view') === 'exams' ? 'exams' : 'dashboard')
   const [purchases, setPurchases] = useState<PurchaseRow[]>([])
   const [attempts, setAttempts] = useState<AttemptRow[]>([])
   const [stats, setStats] = useState<QuestionStat[]>([])
@@ -193,7 +195,7 @@ function StudentAccount() {
     {
       label: 'Practice',
       items: [
-        { key: 'exams', label: 'Browse exams', icon: 'book', to: '/exams' },
+        { key: 'exams', label: 'Browse exams', icon: 'book' },
       ],
     },
   ]
@@ -201,6 +203,7 @@ function StudentAccount() {
     dashboard: [`Welcome back, ${String(name).split(' ')[0]}`, 'Your progress and where to focus next'],
     results: ['My results', 'Every exam you have completed'],
     purchases: ['Purchases', 'Exams you have bought'],
+    exams: ['Browse exams', 'Choose a practice exam to start'],
   }
 
   const latestScaled = (r?: AttemptResultRow) =>
@@ -217,9 +220,11 @@ function StudentAccount() {
       onSignOut={handleSignOut}
       title={titles[view][0]}
       subtitle={titles[view][1]}
-      actions={<button className="btn-primary" onClick={() => navigate('/exams')}>Take an exam</button>}
+      actions={<button className="btn-primary" onClick={() => setView('exams')}>Take an exam</button>}
     >
-      {loading ? (
+      {view === 'exams' ? (
+        <ExamCatalog embedded />
+      ) : loading ? (
         <p>Loading…</p>
       ) : view === 'dashboard' ? (
         attempts.length === 0 ? (
@@ -227,7 +232,7 @@ function StudentAccount() {
             <strong>No exams completed yet</strong>
             Finish a practice exam and your scores, strengths and weak areas will appear here.
             <div style={{ marginTop: 16 }}>
-              <button className="btn-primary" onClick={() => navigate('/exams')}>Browse exams</button>
+              <button className="btn-primary" onClick={() => setView('exams')}>Browse exams</button>
             </div>
           </div>
         ) : (
