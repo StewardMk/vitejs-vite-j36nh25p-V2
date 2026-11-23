@@ -87,22 +87,88 @@ function ExamCatalog({ embedded = false }: { embedded?: boolean }) {
     navigate('/exam')
   }
 
+  function loadLencoScript(url: string) {
+    return new Promise<void>((resolve, reject) => {
+      if ((window as any).LencoPay) return resolve()
+      const existing = document.querySelector(`script[src="${url}"]`)
+      if (existing) {
+        existing.addEventListener('load', () => resolve())
+        return
+      }
+      const el = document.createElement('script')
+      el.src = url
+      el.onload = () => resolve()
+      el.onerror = () => reject(new Error('Could not load the payment window. Check your connection and try again.'))
+      document.head.appendChild(el)
+    })
+  }
+
+  // Ask the server whether Lenco has confirmed the payment, retrying briefly for slow mobile money.
+  async function confirmWithServer(reference: string) {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const { data } = await supabase.functions.invoke('lenco-pay', { body: { action: 'verify', reference } })
+      if (data?.ok) return true
+      if (data?.status && !['pending', 'unknown'].includes(data.status)) return false
+      await new Promise((r) => setTimeout(r, 3000))
+    }
+    return false
+  }
+
   async function confirmPurchase(test: CatalogTest) {
     setBusyTestId(test.id)
     setActionError('')
+    setPendingBuy(null)
 
-    const { data, error } = await supabase.rpc('create_fake_purchase', { p_test_id: test.id })
-
+    const { data, error } = await supabase.functions.invoke('lenco-pay', { body: { action: 'init', testId: test.id } })
     if (error || data?.error) {
       setBusyTestId(null)
-      setActionError(error?.message ?? data?.error ?? 'Payment could not be completed.')
-      setPendingBuy(null)
+      setActionError(
+        data?.code === 'not_configured'
+          ? 'Online payments are not available yet. Please try again later.'
+          : data?.error ?? error?.message ?? 'Could not start the payment.'
+      )
+      return
+    }
+    if (data.alreadyOwned) {
+      setOwned((prev) => new Set(prev).add(test.id))
+      await startExam(test.id)
       return
     }
 
-    setPendingBuy(null)
-    setOwned((prev) => new Set(prev).add(test.id))
-    await startExam(test.id)
+    try {
+      await loadLencoScript(data.widgetUrl)
+    } catch (e: any) {
+      setBusyTestId(null)
+      setActionError(e.message)
+      return
+    }
+
+    const finish = async () => {
+      setActionError('')
+      const ok = await confirmWithServer(data.reference)
+      if (ok) {
+        setOwned((prev) => new Set(prev).add(test.id))
+        await startExam(test.id)
+      } else {
+        setBusyTestId(null)
+        setActionError('We have not received confirmation of your payment yet. If money left your account, refresh this page in a few minutes. The exam will unlock automatically.')
+      }
+    }
+
+    const [firstName, ...rest] = String(data.name || '').split(' ')
+    ;(window as any).LencoPay.getPaid({
+      key: data.publicKey,
+      reference: data.reference,
+      email: data.email,
+      amount: data.amount,
+      currency: data.currency,
+      label: data.label,
+      channels: ['mobile-money', 'card'],
+      customer: { firstName: firstName || undefined, lastName: rest.join(' ') || undefined },
+      onSuccess: () => { void finish() },
+      onConfirmationPending: () => { void finish() },
+      onClose: () => setBusyTestId(null),
+    })
   }
 
   return (
