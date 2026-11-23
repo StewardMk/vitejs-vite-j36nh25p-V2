@@ -53,6 +53,29 @@ export function describeFile(name: string) {
   }
 }
 
+function examNumber(label: string | null) {
+  const m = (label ?? '').match(/(\d+)/)
+  return m ? parseInt(m[1], 10) : null
+}
+
+/** Newest (highest-numbered) exam first, then other named exams A-Z, then documents with no exam. */
+function groupByExam(items: ResourceRow[]) {
+  const map = new Map<string, ResourceRow[]>()
+  for (const r of items) {
+    const key = (r.exam_label ?? '').trim()
+    map.set(key, [...(map.get(key) ?? []), r])
+  }
+  return [...map.entries()].sort(([a], [b]) => {
+    if (!a) return 1
+    if (!b) return -1
+    const na = examNumber(a), nb = examNumber(b)
+    if (na !== null && nb !== null && na !== nb) return nb - na
+    if (na !== null && nb === null) return -1
+    if (na === null && nb !== null) return 1
+    return a.localeCompare(b)
+  })
+}
+
 interface Props {
   userId: string
   canDelete: boolean
@@ -64,6 +87,7 @@ function ResourceLibrary({ userId, canDelete }: Props) {
   const [error, setError] = useState('')
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [grouped, setGrouped] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
 
   const [title, setTitle] = useState('')
@@ -204,6 +228,14 @@ function ResourceLibrary({ userId, canDelete }: Props) {
             {c.label} ({rows.filter((r) => r.category === c.key).length})
           </button>
         ))}
+        <button
+          className={`chip chip-toggle ${grouped ? 'active' : ''}`}
+          aria-pressed={grouped}
+          onClick={() => setGrouped((g) => !g)}
+          title={grouped ? 'Showing documents grouped by exam. Click to show them all together.' : 'Click to group documents by exam.'}
+        >
+          Group by exam: {grouped ? 'On' : 'Off'}
+        </button>
       </div>
 
       {error && <p className="tutor-error">{error}</p>}
@@ -216,6 +248,44 @@ function ResourceLibrary({ userId, canDelete }: Props) {
           {rows.length === 0 ? 'Use “Upload document” to add tutor guides, printable tests and answer keys.' : 'Try a different category or search term.'}
         </div>
       ) : (
+        grouped ? (
+          <>
+            {(filter === 'all' ? CATEGORIES : CATEGORIES.filter((c) => c.key === filter))
+              .map((c) => ({ c, items: visible.filter((r) => r.category === c.key) }))
+              .filter((sec) => sec.items.length > 0)
+              .map(({ c, items }) => (
+                <section key={c.key} className="resource-section">
+                  {filter === 'all' && <h2 className="resource-section-title">{c.label} <span>({items.length})</span></h2>}
+                  {groupByExam(items).map(([exam, group]) => (
+                    <div key={exam || 'none'} className="resource-group">
+                      <h3 className="resource-group-title">{exam || 'Not linked to an exam'} <span>({group.length})</span></h3>
+                      <div className="resource-grid">
+                        {group.map((r) => (
+                          <div key={r.id} className="resource-card">
+                            <div>
+                              <span className="resource-tag">{categoryLabel(r.category)}</span>
+                              <h3>{r.title}</h3>
+                            </div>
+                            <div className="resource-meta">
+                              {[r.exam_label, formatSize(r.file_size), new Date(r.created_at).toLocaleDateString()].filter(Boolean).join(' · ')}
+                            </div>
+                            <div className="resource-actions">
+                              <button className="btn-primary" disabled={busyId === r.id} onClick={() => handleDownload(r)}>
+                                <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><Icon name="file" />Download</span>
+                              </button>
+                              {canDelete && (
+                                <button className="btn-secondary" disabled={busyId === r.id} onClick={() => handleDelete(r)}>Delete</button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </section>
+              ))}
+          </>
+        ) : (
         <div className="resource-grid">
           {visible.map((r) => (
             <div key={r.id} className="resource-card">
@@ -237,6 +307,7 @@ function ResourceLibrary({ userId, canDelete }: Props) {
             </div>
           ))}
         </div>
+        )
       )}
     </>
   )
