@@ -105,12 +105,14 @@ async function getUser(req: Request) {
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
-  if (!SECRET || !PUBLIC_KEY) return json({ error: 'Online payments are not set up yet.', code: 'not_configured' }, 503)
+  const configured = !!SECRET && !!PUBLIC_KEY
+  const notConfigured = () => json({ error: 'Online payments are not set up yet.', code: 'not_configured' }, 503)
 
   try {
     // ---- Lenco webhook
     const signature = req.headers.get('x-lenco-signature')
     if (signature) {
+      if (!configured) return notConfigured()
       const raw = await req.text()
       if (!safeEqual(signature.toLowerCase(), await webhookSignature(raw))) return json({ error: 'Bad signature' }, 401)
       const evt = JSON.parse(raw)
@@ -129,13 +131,28 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}))
 
     if (body.action === 'init') {
-      const { data: profile } = await admin.from('profiles').select('is_banned, is_approved, full_name').eq('id', user.id).maybeSingle()
+      const { data: profile } = await admin.from('profiles').select('is_banned, is_approved, full_name, is_demo').eq('id', user.id).maybeSingle()
       if (!profile || profile.is_banned) return json({ error: 'Your account is suspended. Contact support.' }, 403)
       if (!profile.is_approved) return json({ error: 'Your account is awaiting admin approval.' }, 403)
 
       const { data: test } = await admin.from('tests').select('id, title, price_kwacha, is_published').eq('id', body.testId).maybeSingle()
       if (!test || !test.is_published) return json({ error: 'That exam is not available.' }, 404)
       if (test.price_kwacha <= 0) return json({ error: 'That exam is free.' }, 400)
+
+      // Demo accounts skip payment: the exam is granted at once and never reaches Lenco.
+      if (profile.is_demo) {
+        const { data: have } = await admin.from('purchases').select('id').eq('user_id', user.id).eq('test_id', test.id)
+          .in('status', ['paid', 'fake_paid']).maybeSingle()
+        if (!have) {
+          const { error: demoErr } = await admin.from('purchases').insert({
+            user_id: user.id, test_id: test.id, amount_kwacha: test.price_kwacha, currency: 'ZMW',
+            status: 'fake_paid', provider: 'fake', paid_at: new Date().toISOString(),
+          })
+          if (demoErr) return json({ error: demoErr.message }, 500)
+        }
+        return json({ alreadyOwned: true })
+      }
+      if (!configured) return notConfigured()
 
       // Paid access is limited (see exam_access_rules). Still-valid access means nothing to buy;
       // ended access is closed off here so the student can buy the exam again.
@@ -160,6 +177,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (body.action === 'verify') {
+      if (!configured) return notConfigured()
       const reference = String(body.reference ?? '')
       const { data: mine } = await admin.from('purchases').select('id').eq('provider', 'lenco')
         .eq('provider_reference', reference).eq('user_id', user.id).maybeSingle()
